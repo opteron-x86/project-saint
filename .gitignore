@@ -63,12 +63,3 @@ dist-ssr
 >>>>>>> bae12e2 (Feature/dashboard improvements)
 =======
 
-# backend code - local dev
-backend
->>>>>>> 84dc71d (Complete infrastructure overhaul to serverless)
-=======
->>>>>>> a6cbcab (Complete infrastructure overhaul to serverless, including backend code)
-=======
-.env.development
-.env.production
->>>>>>> 37ba2d8 (Initial commit)
