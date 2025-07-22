@@ -1,0 +1,74 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+node_modules
+dist
+dist-ssr
+*.local
+
+backend-scripts
+
+>>>>>>> 984e985 (backend rework for rule_platforms)
+=======
+>>>>>>> bae12e2 (Feature/dashboard improvements)
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+node_modules
+<<<<<<< HEAD
+<<<<<<< HEAD
+dist
+dist-ssr
+*.local
+.platform
+.ebextensions
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+=======
+.env
+>>>>>>> a380730 (Initial deployment)
+=======
+dist
+dist-ssr
+*.local
+.platform
+.ebextensions
+
+# Environment variables
+.env
+.env.local
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+>>>>>>> bae12e2 (Feature/dashboard improvements)
+=======
+
+# backend code - local dev
+backend
+>>>>>>> 84dc71d (Complete infrastructure overhaul to serverless)
+=======
+>>>>>>> a6cbcab (Complete infrastructure overhaul to serverless, including backend code)
+=======
+.env.development
+.env.production
+>>>>>>> 37ba2d8 (Initial commit)
