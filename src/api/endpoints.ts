@@ -1,41 +1,75 @@
-// src/api/endpoints.ts
+// src/api/endpoints.ts - Enhanced for Phase 2 with TypeScript fixes
 
 import { apiGet } from './client';
 import {
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
   RuleSummary,
   RuleDetail,
   FetchRulesResponse,
   PaginationParams,
   RuleFilters,
-<<<<<<< HEAD
   TechniquesCoverageResponse,
   FetchRuleStatsResponse,
   FilterOptionsResponse,
+  MitreMatrixData,
+  DashboardResponse,
+  TrendAnalysisResponse,
+  GlobalSearchResponse,
+  ExportRequest,
+  ExportResponse,
+  CveDetail,
+  CveStatsResponse,
+  RuleEnrichmentResponse,
+  MitreTechniquesResponse,
+  MitreTacticsResponse,
 } from './types';
 
-// Base endpoint paths
+// --- Enhanced Endpoint Configuration ---
 const ENDPOINTS = {
+  // Core endpoints
+  HEALTH: '/health',
+  API_DOCS: '/api/docs',
+  
+  // Rules endpoints
   RULES: '/rules',
   RULE_BY_ID: (id: string) => `/rules/${id}`,
-  TECHNIQUES_COVERAGE: '/mitre/coverage',
-  STATS: '/rules/stats',
-  FILTERS_OPTIONS: '/filters/options',
+  RULES_STATS: '/rules/stats',
+  RULES_ENRICHMENT: '/rules/enrichment',
+  RULES_EXPORT: '/rules/export',
+  RULE_ISSUES: (id: string) => `/rules/${id}/issues`,
+  
+  // MITRE endpoints
   MITRE_MATRIX: '/mitre/matrix',
-};
+  MITRE_COVERAGE: '/mitre/coverage',
+  MITRE_TECHNIQUES: '/mitre/techniques',
+  MITRE_TACTICS: '/mitre/tactics',
+  
+  // CVE endpoints
+  CVES: '/cves',
+  CVE_BY_ID: (id: string) => `/cves/${id}`,
+  CVE_STATS: '/cves/stats',
+  
+  // Filter endpoints
+  FILTERS_OPTIONS: '/filters/options',
+  
+  // Analytics endpoints
+  ANALYTICS_DASHBOARD: '/analytics/dashboard',
+  ANALYTICS_TRENDS: '/analytics/trends',
+  
+  // Search endpoints
+  GLOBAL_SEARCH: '/search',
+} as const;
 
 /**
- * Convert filters and pagination to query parameters.
- * Ensures all filter parameters are correctly included.
+ * Enhanced query parameter building with better array handling
  */
 const buildQueryParams = (
-    pagination?: PaginationParams,
-    filters?: RuleFilters,
+  pagination?: PaginationParams,
+  filters?: RuleFilters,
+  additionalParams?: Record<string, string | number | boolean | string[] | number[]>
 ): string => {
   const params = new URLSearchParams();
 
+  // Add pagination parameters
   if (pagination) {
     params.append('offset', ((pagination.page - 1) * pagination.limit).toString());
     params.append('limit', pagination.limit.toString());
@@ -48,146 +82,72 @@ const buildQueryParams = (
     }
   }
 
+  // Add filter parameters
   if (filters) {
-    if (filters.search) {
-      params.append('query', filters.search);
+    // Text search
+    if (filters.search?.trim()) {
+      params.append('query', filters.search.trim());
     }
-    filters.severity?.forEach(value => params.append('severities', value));
-    filters.rule_source?.forEach(value => params.append('source_ids', value));
-    filters.tags?.forEach(value => params.append('tags', value));
-    filters.platforms?.forEach(value => params.append('platforms', value));
-    filters.rule_platform?.forEach(value => params.append('rule_platforms', value));
-    filters.tactics?.forEach(value => params.append('tactics', value));
-  }
-
-=======
-  Rule,
-=======
-  RuleSummary,         // Updated: Using RuleSummary for lists
-  RuleDetail,          // Updated: Using RuleDetail for single rule
->>>>>>> 2f90ce0 (refactor to work with the new backend)
-=======
-  RuleSummary,
-  RuleDetail,
->>>>>>> 984e985 (backend rework for rule_platforms)
-  FetchRulesResponse,
-  PaginationParams,
-  RuleFilters, // This type now includes rule_platform?: string[]
-=======
->>>>>>> 23a6656 (Feature/issue creator)
-  TechniquesCoverageResponse,
-  FetchRuleStatsResponse,
-  FilterOptionsResponse,
-} from './types';
-
-// Base endpoint paths
-const ENDPOINTS = {
-  RULES: '/rules',
-  RULE_BY_ID: (id: string) => `/rules/${id}`,
-  TECHNIQUES_COVERAGE: '/mitre/coverage',
-  STATS: '/rules/stats',
-  FILTERS_OPTIONS: '/filters/options',
-  MITRE_MATRIX: '/mitre/matrix',
-};
-
-/**
- * Convert filters and pagination to query parameters.
- * Ensures all filter parameters are correctly included.
- */
-const buildQueryParams = (
-    pagination?: PaginationParams,
-    filters?: RuleFilters,
-): string => {
-  const params = new URLSearchParams();
-
-  if (pagination) {
-    params.append('offset', ((pagination.page - 1) * pagination.limit).toString());
-    params.append('limit', pagination.limit.toString());
     
-    if (pagination.sortBy) {
-      params.append('sort_by', pagination.sortBy);
-    }
-    if (pagination.sortDirection) {
-      params.append('sort_dir', pagination.sortDirection);
-    }
-  }
-
-  if (filters) {
-    if (filters.search) {
-      params.append('query', filters.search);
-    }
+    // Array filters - append each value separately for better backend compatibility
     filters.severity?.forEach(value => params.append('severities', value));
     filters.rule_source?.forEach(value => params.append('source_ids', value));
     filters.tags?.forEach(value => params.append('tags', value));
     filters.platforms?.forEach(value => params.append('platforms', value));
     filters.rule_platform?.forEach(value => params.append('rule_platforms', value));
     filters.tactics?.forEach(value => params.append('tactics', value));
-  }
-
-<<<<<<< HEAD
-  if (platform) {
-    // Assuming your backend expects a query param like 'platform' or 'platforms'
-    params.append('platform', platform);
+    filters.techniques?.forEach(value => params.append('techniques', value));
+    filters.mitre_techniques?.forEach(value => params.append('mitre_techniques', value));
+    filters.cve_ids?.forEach(value => params.append('cve_ids', value));
+    filters.validation_status?.forEach(value => params.append('validation_statuses', value));
+    filters.enrichment_status?.forEach(value => params.append('enrichment_status', value));
+    
+    // Boolean filters
+    if (filters.is_active !== undefined) {
+      params.append('is_active', filters.is_active.toString());
+    }
+    
+    // Date range filters
+    if (filters.dateRange?.start) {
+      params.append('start_date', filters.dateRange.start);
+    }
+    if (filters.dateRange?.end) {
+      params.append('end_date', filters.dateRange.end);
+    }
   }
   
->>>>>>> a380730 (Initial deployment)
-=======
->>>>>>> 946a95a (Fixed endpoints)
+  // Add any additional parameters
+  if (additionalParams) {
+    Object.entries(additionalParams).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        if (Array.isArray(value)) {
+          value.forEach(v => params.append(key, String(v)));
+        } else {
+          params.append(key, String(value));
+        }
+      }
+    });
+  }
+
   const queryString = params.toString();
   return queryString ? `?${queryString}` : '';
 };
 
+// --- Core Rule Operations ---
+
 /**
- * Fetch rules with pagination and filtering
+ * Fetch rules with enhanced filtering and pagination
  */
 export const fetchRules = async (
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
   pagination: PaginationParams,
-=======
-  pagination?: PaginationParams,
->>>>>>> a380730 (Initial deployment)
-=======
-  pagination: PaginationParams, // Made pagination required as backend needs offset/limit
->>>>>>> 2f90ce0 (refactor to work with the new backend)
-=======
-  pagination: PaginationParams,
->>>>>>> 984e985 (backend rework for rule_platforms)
   filters?: RuleFilters
 ): Promise<FetchRulesResponse> => {
   try {
     const queryString = buildQueryParams(pagination, filters);
     const url = `${ENDPOINTS.RULES}${queryString}`;
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
     
-<<<<<<< HEAD
-    const response = await apiGet<{
-      items: RuleSummary[];
-      total: number;
-      limit: number;
-      offset: number;
-    }>(url);
-    
-    return {
-      rules: response.items,
-      total: response.total,
-      limit: response.limit,
-      page: (response.offset / response.limit) + 1,
-      totalPages: Math.ceil(response.total / response.limit),
-=======
-=======
-
->>>>>>> 946a95a (Fixed endpoints)
-=======
->>>>>>> 2f90ce0 (refactor to work with the new backend)
     console.log('Fetching rules with URL:', url);
-
-=======
     
->>>>>>> 84dc71d (Complete infrastructure overhaul to serverless)
     const response = await apiGet<{
       items: RuleSummary[];
       total: number;
@@ -196,24 +156,11 @@ export const fetchRules = async (
     }>(url);
     
     return {
-<<<<<<< HEAD
-<<<<<<< HEAD
-      rules: [],
-      total: 0,
-      page: pagination?.page || 1,
-      limit: pagination?.limit || 25,
-      totalPages: 0,
->>>>>>> a380730 (Initial deployment)
-=======
-      rules: response.rules,
-=======
       rules: response.items,
->>>>>>> 37ba2d8 (Initial commit)
       total: response.total,
       limit: response.limit,
-      page: (response.offset / response.limit) + 1,
+      page: Math.floor(response.offset / response.limit) + 1,
       totalPages: Math.ceil(response.total / response.limit),
->>>>>>> 2f90ce0 (refactor to work with the new backend)
     };
   } catch (error) {
     console.error('Error fetching rules:', error);
@@ -222,23 +169,11 @@ export const fetchRules = async (
 };
 
 /**
- * Fetch a rule by ID
+ * Fetch a single rule by ID with full details
  */
-<<<<<<< HEAD
-<<<<<<< HEAD
 export const fetchRuleById = async (id: string): Promise<RuleDetail> => {
   try {
     return await apiGet<RuleDetail>(ENDPOINTS.RULE_BY_ID(id));
-=======
-export const fetchRuleById = async (id: string): Promise<Rule> => {
-  try {
-    return await apiGet<Rule>(ENDPOINTS.RULE_BY_ID(id));
->>>>>>> a380730 (Initial deployment)
-=======
-export const fetchRuleById = async (id: string): Promise<RuleDetail> => {
-  try {
-    return await apiGet<RuleDetail>(ENDPOINTS.RULE_BY_ID(id));
->>>>>>> 2f90ce0 (refactor to work with the new backend)
   } catch (error) {
     console.error(`Error fetching rule with ID ${id}:`, error);
     throw error;
@@ -246,133 +181,91 @@ export const fetchRuleById = async (id: string): Promise<RuleDetail> => {
 };
 
 /**
-<<<<<<< HEAD
-<<<<<<< HEAD
- * Fetch technique coverage statistics
+ * Fetch rule statistics with optional filtering
  */
-export const fetchTechniqueCoverage = async (
-  platform?: string | null,
-  rulePlatform?: string | null
-): Promise<TechniquesCoverageResponse> => {
+export const fetchRuleStats = async (filters?: RuleFilters): Promise<FetchRuleStatsResponse> => {
   try {
-    const params = new URLSearchParams();
-    if (platform) {
-      params.append('platform', platform);
-    }
-    if (rulePlatform) {
-      params.append('rule_platform', rulePlatform);
-    }
-    const queryString = params.toString();
-    const url = `${ENDPOINTS.TECHNIQUES_COVERAGE}${queryString ? `?${queryString}` : ''}`;
+    const queryString = buildQueryParams(undefined, filters);
+    const url = `${ENDPOINTS.RULES_STATS}${queryString}`;
     
-<<<<<<< HEAD
-    return await apiGet<TechniquesCoverageResponse>(url);
-=======
- * Fetch rules by technique ID
- * This now calls the main /rules endpoint with a technique_id filter
- */
-export const fetchRulesByTechnique = async (
-  techniqueId: string,
-  pagination?: PaginationParams
-): Promise<FetchRulesResponse> => {
-  try {
-    // Pass the techniqueId as part of the filters
-    const filters: RuleFilters = { techniques: [techniqueId] };
-    const queryString = buildQueryParams(pagination, filters);
-    const url = `${ENDPOINTS.RULES}${queryString}`;
-
-    console.log('Fetching rules by technique with URL:', url);
-    const response = await apiGet<any>(url); // Adjust 'any' as needed
-
-    // Assuming the response structure is similar to the main fetchRules
-    if (response.rules && Array.isArray(response.rules) && typeof response.total === 'number') {
-        return {
-          rules: response.rules,
-          total: response.total,
-          page: response.offset / response.limit + 1,
-          limit: response.limit,
-          totalPages: Math.ceil(response.total / response.limit),
-        };
-      }
-
-    console.error('Unexpected API response format for fetchRulesByTechnique:', response);
-    return { rules: [], total: 0, page: 1, limit: 25, totalPages: 0 };
-
+    console.log('Fetching rule stats from URL:', url);
+    return await apiGet<FetchRuleStatsResponse>(url);
   } catch (error) {
-    console.error(`Error fetching rules for technique ${techniqueId}:`, error);
+    console.error('Error fetching rule statistics:', error);
     throw error;
   }
 };
 
 /**
- * Fetch rules by platform
- * This now calls the main /rules endpoint with a platform filter
+ * Fetch rule enrichment statistics
  */
-export const fetchRulesByPlatform = async (
-  platform: string,
-  pagination?: PaginationParams
-): Promise<FetchRulesResponse> => {
+export const fetchRuleEnrichment = async (filters?: RuleFilters): Promise<RuleEnrichmentResponse> => {
   try {
-    // Pass the platform as part of the filters
-    const filters: RuleFilters = { platforms: [platform] };
-    const queryString = buildQueryParams(pagination, filters);
-    const url = `${ENDPOINTS.RULES}${queryString}`;
-
-    console.log('Fetching rules by platform with URL:', url);
-    const response = await apiGet<any>(url); // Adjust 'any' as needed
-
-    if (response.rules && Array.isArray(response.rules) && typeof response.total === 'number') {
-        return {
-          rules: response.rules,
-          total: response.total,
-          page: response.offset / response.limit + 1,
-          limit: response.limit,
-          totalPages: Math.ceil(response.total / response.limit),
-        };
-      }
-
-    console.error('Unexpected API response format for fetchRulesByPlatform:', response);
-    return { rules: [], total: 0, page: 1, limit: 25, totalPages: 0 };
-
+    const queryString = buildQueryParams(undefined, filters);
+    const url = `${ENDPOINTS.RULES_ENRICHMENT}${queryString}`;
+    
+    return await apiGet<RuleEnrichmentResponse>(url);
   } catch (error) {
-    console.error(`Error fetching rules for platform ${platform}:`, error);
+    console.error('Error fetching rule enrichment statistics:', error);
     throw error;
   }
 };
 
 /**
-=======
->>>>>>> 2f90ce0 (refactor to work with the new backend)
- * Fetch technique coverage statistics
+ * Export rules in specified format
+ */
+export const exportRules = async (request: ExportRequest): Promise<ExportResponse> => {
+  try {
+    const params: Record<string, string | number | boolean | string[]> = {
+      format: request.format,
+      ...request.filters,
+    };
+    
+    if (request.fields?.length) {
+      params.fields = request.fields;
+    }
+    
+    const queryString = buildQueryParams(undefined, undefined, params);
+    const url = `${ENDPOINTS.RULES_EXPORT}${queryString}`;
+    
+    return await apiGet<ExportResponse>(url);
+  } catch (error) {
+    console.error('Error exporting rules:', error);
+    throw error;
+  }
+};
+
+// --- MITRE ATT&CK Operations ---
+
+/**
+ * Fetch MITRE ATT&CK matrix data
+ */
+export const fetchMitreMatrix = async (): Promise<MitreMatrixData> => {
+  try {
+    return await apiGet<MitreMatrixData>(ENDPOINTS.MITRE_MATRIX);
+  } catch (error) {
+    console.error('Error fetching MITRE matrix:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch technique coverage analysis
  */
 export const fetchTechniqueCoverage = async (
   platform?: string | null,
   rulePlatform?: string | null
 ): Promise<TechniquesCoverageResponse> => {
   try {
-<<<<<<< HEAD
-<<<<<<< HEAD
-    return await apiGet<TechniqueCoverage>(ENDPOINTS.TECHNIQUES_COVERAGE);
->>>>>>> a380730 (Initial deployment)
-=======
-    let url = ENDPOINTS.TECHNIQUES_COVERAGE;
-=======
-    const params = new URLSearchParams();
->>>>>>> 984e985 (backend rework for rule_platforms)
-    if (platform) {
-      params.append('platform', platform);
-    }
-    if (rulePlatform) {
-      params.append('rule_platform', rulePlatform);
-    }
-    const queryString = params.toString();
-    const url = `${ENDPOINTS.TECHNIQUES_COVERAGE}${queryString ? `?${queryString}` : ''}`;
+    const params: Record<string, string> = {};
+    if (platform) params.platform = platform;
+    if (rulePlatform) params.rule_platform = rulePlatform;
+    
+    const queryString = params ? `?${new URLSearchParams(params).toString()}` : '';
+    const url = `${ENDPOINTS.MITRE_COVERAGE}${queryString}`;
     
     console.log('Fetching technique coverage with URL:', url);
-=======
->>>>>>> 37ba2d8 (Initial commit)
     return await apiGet<TechniquesCoverageResponse>(url);
->>>>>>> 2f90ce0 (refactor to work with the new backend)
   } catch (error) {
     console.error('Error fetching technique coverage:', error);
     throw error;
@@ -380,25 +273,76 @@ export const fetchTechniqueCoverage = async (
 };
 
 /**
- * Fetch rule statistics
+ * Fetch MITRE techniques with pagination
  */
-<<<<<<< HEAD
-<<<<<<< HEAD
-export const fetchRuleStats = async (filters?: RuleFilters): Promise<FetchRuleStatsResponse> => {
+export const fetchMitreTechniques = async (
+  pagination?: PaginationParams,
+  search?: string
+): Promise<MitreTechniquesResponse> => {
   try {
-    const queryString = buildQueryParams(undefined, filters);
-    const url = `${ENDPOINTS.STATS}${queryString}`;
-<<<<<<< HEAD
-<<<<<<< HEAD
-    return await apiGet<FetchRuleStatsResponse>(url);
+    const params: Record<string, string | number> = {};
+    
+    if (pagination) {
+      params.offset = (pagination.page - 1) * pagination.limit;
+      params.limit = pagination.limit;
+    }
+    
+    if (search?.trim()) {
+      params.search = search.trim();
+    }
+    
+    const queryString = buildQueryParams(undefined, undefined, params);
+    const url = `${ENDPOINTS.MITRE_TECHNIQUES}${queryString}`;
+    
+    return await apiGet<MitreTechniquesResponse>(url);
   } catch (error) {
-    console.error('Error fetching rule statistics:', error);
+    console.error('Error fetching MITRE techniques:', error);
     throw error;
   }
 };
 
 /**
- * Fetch available filter options
+ * Fetch MITRE tactics
+ */
+export const fetchMitreTactics = async (): Promise<MitreTacticsResponse> => {
+  try {
+    return await apiGet<MitreTacticsResponse>(ENDPOINTS.MITRE_TACTICS);
+  } catch (error) {
+    console.error('Error fetching MITRE tactics:', error);
+    throw error;
+  }
+};
+
+// --- CVE Operations ---
+
+/**
+ * Fetch CVE details by ID
+ */
+export const fetchCveById = async (cveId: string): Promise<CveDetail> => {
+  try {
+    return await apiGet<CveDetail>(ENDPOINTS.CVE_BY_ID(cveId));
+  } catch (error) {
+    console.error(`Error fetching CVE ${cveId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch CVE statistics
+ */
+export const fetchCveStats = async (): Promise<CveStatsResponse> => {
+  try {
+    return await apiGet<CveStatsResponse>(ENDPOINTS.CVE_STATS);
+  } catch (error) {
+    console.error('Error fetching CVE statistics:', error);
+    throw error;
+  }
+};
+
+// --- Filter Operations ---
+
+/**
+ * Fetch available filter options with counts
  */
 export const fetchFilterOptions = async (): Promise<FilterOptionsResponse> => {
   try {
@@ -409,75 +353,106 @@ export const fetchFilterOptions = async (): Promise<FilterOptionsResponse> => {
   }
 };
 
-<<<<<<< HEAD
-export const CREATE_ISSUE = (ruleId: string): string => `/rules/${ruleId}/issues`;
-=======
-export const fetchRuleStats = async (filters?: RuleFilters) => {
-=======
-export const fetchRuleStats = async (filters?: RuleFilters): Promise<FetchRuleStatsResponse> => {
->>>>>>> 946a95a (Fixed endpoints)
-  try {
-    const queryString = buildQueryParams(undefined, filters);
-    // Assuming your backend might have a /rules/stats endpoint, or adjust as needed
-    const url = `${ENDPOINTS.RULES}/stats${queryString}`;
-
-=======
->>>>>>> 2f90ce0 (refactor to work with the new backend)
-    console.log('Fetching rule stats from URL:', url);
-=======
->>>>>>> 84dc71d (Complete infrastructure overhaul to serverless)
-    return await apiGet<FetchRuleStatsResponse>(url);
-  } catch (error) {
-    console.error('Error fetching rule statistics:', error);
-    throw error;
-  }
-};
-<<<<<<< HEAD
->>>>>>> a380730 (Initial deployment)
-=======
+// --- Analytics Operations ---
 
 /**
- * Fetch available filter options
+ * Fetch dashboard analytics data
  */
-export const fetchFilterOptions = async (): Promise<FilterOptionsResponse> => {
+export const fetchDashboardData = async (params?: {
+  days_back?: number;
+  source_ids?: number[];
+  severities?: string[];
+}): Promise<DashboardResponse> => {
   try {
-    return await apiGet<FilterOptionsResponse>(ENDPOINTS.FILTERS_OPTIONS);
+    const queryString = buildQueryParams(undefined, undefined, params);
+    const url = `${ENDPOINTS.ANALYTICS_DASHBOARD}${queryString}`;
+    
+    return await apiGet<DashboardResponse>(url);
   } catch (error) {
-    console.error('Error fetching filter options:', error);
+    console.error('Error fetching dashboard data:', error);
     throw error;
   }
 };
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-// fetchRulesByTechnique and fetchRulesByPlatform are now covered by fetchRules
-// by passing the appropriate filter in RuleFilters.
-// Example usage from queries.ts would change:
-// useRulesByTechniqueQuery(techniqueId, pagination) would call:
-//   fetchRules(pagination, { techniques: [techniqueId] })
+/**
+ * Fetch trend analysis data
+ */
+export const fetchTrendAnalysis = async (params?: {
+  period?: string;
+  days_back?: number;
+}): Promise<TrendAnalysisResponse> => {
+  try {
+    const queryString = buildQueryParams(undefined, undefined, params);
+    const url = `${ENDPOINTS.ANALYTICS_TRENDS}${queryString}`;
+    
+    return await apiGet<TrendAnalysisResponse>(url);
+  } catch (error) {
+    console.error('Error fetching trend analysis:', error);
+    throw error;
+  }
+};
 
-<<<<<<< HEAD
-// Similarly for platforms.
->>>>>>> 2f90ce0 (refactor to work with the new backend)
-=======
-// Example for fetching Mitre Matrix data if you centralize all fetches here
-// import { MitreMatrixData } from './types'; // Ensure type is imported
-// export const fetchMitreMatrix = async (): Promise<MitreMatrixData> => {
-//   try {
-//     return await apiGet<MitreMatrixData>(ENDPOINTS.MITRE_MATRIX);
-//   } catch (error) {
-//     console.error('Error fetching MITRE Matrix data:', error);
-//     throw error;
-//   }
-// };
->>>>>>> 984e985 (backend rework for rule_platforms)
-=======
+// --- Search Operations ---
 
-export const CREATE_ISSUE = (ruleId: string): string => `/rules/${ruleId}/issues`;
->>>>>>> 23a6656 (Feature/issue creator)
-=======
-export const CREATE_ISSUE = (ruleId: string): string => `/rules/${ruleId}/issues`;
->>>>>>> 84dc71d (Complete infrastructure overhaul to serverless)
-=======
-export const CREATE_ISSUE = (ruleId: string): string => `/rules/${ruleId}/issues`;
->>>>>>> 37ba2d8 (Initial commit)
+/**
+ * Perform global search across all entities
+ */
+export const performGlobalSearch = async (query: string, params?: {
+  limit?: number;
+  types?: ('rule' | 'cve' | 'mitre_technique')[];
+}): Promise<GlobalSearchResponse> => {
+  try {
+    const searchParams = { query, ...params };
+    const queryString = buildQueryParams(undefined, undefined, searchParams);
+    const url = `${ENDPOINTS.GLOBAL_SEARCH}${queryString}`;
+    
+    return await apiGet<GlobalSearchResponse>(url);
+  } catch (error) {
+    console.error('Error performing global search:', error);
+    throw error;
+  }
+};
+
+// --- Health Check ---
+
+/**
+ * API health check
+ */
+export const fetchHealthStatus = async (): Promise<{ status: string; version?: string }> => {
+  try {
+    return await apiGet<{ status: string; version?: string }>(ENDPOINTS.HEALTH);
+  } catch (error) {
+    console.error('Error fetching health status:', error);
+    throw error;
+  }
+};
+
+// --- Legacy Support Functions ---
+// These maintain compatibility while components are migrated
+
+/**
+ * @deprecated Use fetchRules with technique filter instead
+ */
+export const fetchRulesByTechnique = async (
+  techniqueId: string,
+  pagination?: PaginationParams
+): Promise<FetchRulesResponse> => {
+  console.warn('fetchRulesByTechnique is deprecated. Use fetchRules with techniques filter.');
+  const filters: RuleFilters = { techniques: [techniqueId] };
+  return fetchRules(pagination || { page: 1, limit: 25 }, filters);
+};
+
+/**
+ * @deprecated Use fetchRules with platform filter instead
+ */
+export const fetchRulesByPlatform = async (
+  platform: string,
+  pagination?: PaginationParams
+): Promise<FetchRulesResponse> => {
+  console.warn('fetchRulesByPlatform is deprecated. Use fetchRules with platforms filter.');
+  const filters: RuleFilters = { platforms: [platform] };
+  return fetchRules(pagination || { page: 1, limit: 25 }, filters);
+};
+
+// Export endpoint paths for direct use if needed
+export { ENDPOINTS };

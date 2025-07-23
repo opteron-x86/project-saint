@@ -1,206 +1,90 @@
-// src/api/client.ts
+// src/api/client.ts - Enhanced for Phase 2 with TypeScript fixes
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
-<<<<<<< HEAD
-<<<<<<< HEAD
-import { CREATE_ISSUE } from './endpoints';
-import { CreateIssuePayload, CreateIssueResponse } from './types';
+import { ApiError, CreateIssuePayload, CreateIssueResponse } from './types';
 
-// Base URL from the deployed API Gateway in CloudFormation
-const API_URL = import.meta.env.VITE_API_TARGET || 'https://x2uroi2lm5.execute-api.us-gov-east-1.amazonaws.com/v2';
-<<<<<<< HEAD
-=======
-=======
-import { CREATE_ISSUE } from './endpoints';
-import { CreateIssuePayload, CreateIssueResponse } from './types';
->>>>>>> 23a6656 (Feature/issue creator)
-
-// Base URL from the deployed API Gateway in CloudFormation
-const API_URL = '/api';
->>>>>>> a380730 (Initial deployment)
-=======
->>>>>>> 37ba2d8 (Initial commit)
-
-// Define a generic error type
-export interface ApiError {
-  status: number;
-  message: string;
-  details?: any;
-}
-
-/**
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 37ba2d8 (Initial commit)
- * Safe array helper - ensures we always get an array
- */
-const ensureArray = <T>(value: T[] | null | undefined): T[] => {
-  return Array.isArray(value) ? value : [];
+// Enhanced API URL configuration with development proxy support
+const getApiUrl = () => {
+  // Use proxy in development to avoid CORS issues
+  if (import.meta.env.DEV) {
+    return '/api'; // This will be proxied by Vite to your API Gateway
+  }
+  
+  // Use direct URL in production
+  return import.meta.env.VITE_API_TARGET || 
+         import.meta.env.VITE_API_URL || 
+         'https://x2uroi2lm5.execute-api.us-gov-east-1.amazonaws.com/v3';
 };
 
+const API_URL = getApiUrl();
+
+console.log('API Client initialized with URL:', API_URL);
+
 /**
-<<<<<<< HEAD
-=======
->>>>>>> a380730 (Initial deployment)
-=======
->>>>>>> 37ba2d8 (Initial commit)
- * Create an API error from an Axios error
+ * Enhanced error handling with detailed error information
  */
-const createApiError = (error: any): ApiError => {
+const createApiError = (error: unknown): ApiError => {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError;
+    const response = axiosError.response;
+    
+    // Safely handle response data
+    const responseData = response?.data as Record<string, unknown> | undefined;
+    
     return {
-      status: axiosError.response?.status || 500,
-      message: axiosError.message,
-      details: axiosError.response?.data,
+      status: response?.status || 500,
+      message: (responseData?.message as string) || axiosError.message || 'Network error occurred',
+      details: responseData?.details || responseData,
+      timestamp: new Date().toISOString(),
+      request_id: response?.headers?.['x-request-id'] as string | undefined,
     };
   }
   
   // For non-axios errors
+  const errorObj = error as Error;
   return {
     status: 500,
-    message: error.message || 'Unknown error occurred',
-    details: error,
+    message: errorObj.message || 'Unknown error occurred',
+    details: errorObj,
+    timestamp: new Date().toISOString(),
   };
 };
 
 /**
-<<<<<<< HEAD
-<<<<<<< HEAD
- * Transform API response to handle common response formats and ensure data integrity.
-=======
- * Transform API response to handle common response formats
->>>>>>> a380730 (Initial deployment)
-=======
- * Transform API response to handle common response formats and ensure data integrity.
->>>>>>> 37ba2d8 (Initial commit)
+ * Enhanced response transformation with better data handling
  */
 const transformResponse = <T>(response: AxiosResponse): T => {
   const data = response.data;
   
-<<<<<<< HEAD
-<<<<<<< HEAD
-  // If the API returns non-object data, return it as is.
+  // Handle non-object responses
   if (!data || typeof data !== 'object') {
     return data as T;
   }
   
-  // For other specific response types that need cleaning (e.g., ensuring nested arrays)
-  // we can add safe transformations here. For now, we pass the main object through.
+  // Handle enhanced API responses with metadata
+  if ('data' in data && data.data !== undefined) {
+    // New API format: { data: T, metadata: {...} }
+    return data as T;
+  }
   
-  // Default: return the data object as received from the API.
-=======
-  // If the API returns 'items', 'total', etc. (standard pagination)
-  if (data.items && Array.isArray(data.items)) {
+  // Handle legacy pagination format transformation
+  if ('items' in data && Array.isArray(data.items)) {
     return {
       rules: data.items,
-      total: data.total || data.items.length,
-      page: data.page || 1,
-      limit: data.limit || data.items.length,
-      totalPages: data.totalPages || Math.ceil((data.total || data.items.length) / (data.limit || 10)),
+      total: (data as Record<string, unknown>).total || data.items.length,
+      page: (data as Record<string, unknown>).page || Math.floor(((data as Record<string, unknown>).offset as number || 0) / ((data as Record<string, unknown>).limit as number || 25)) + 1,
+      limit: (data as Record<string, unknown>).limit || data.items.length,
+      totalPages: (data as Record<string, unknown>).totalPages || Math.ceil(((data as Record<string, unknown>).total as number || data.items.length) / ((data as Record<string, unknown>).limit as number || 25)),
     } as unknown as T;
-=======
-  // If the API returns non-object data, return it as is.
-  if (!data || typeof data !== 'object') {
-    return data as T;
->>>>>>> 37ba2d8 (Initial commit)
   }
   
-  // For other specific response types that need cleaning (e.g., ensuring nested arrays)
-  // we can add safe transformations here. For now, we pass the main object through.
-  
-<<<<<<< HEAD
-  // Default - return raw data
->>>>>>> a380730 (Initial deployment)
-=======
-  // Default: return the data object as received from the API.
->>>>>>> 37ba2d8 (Initial commit)
+  // Return data as-is for other formats
   return data as T;
 };
 
 /**
- * Generic GET request function with improved error handling and response transformation
+ * Enhanced query parameter preparation with array support
  */
-export async function apiGet<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
-  try {
-    const url = endpoint.startsWith('http') ? endpoint : API_URL + endpoint;
-    
-    const config: AxiosRequestConfig = {
-      params: params ? prepareQueryParams(params) : undefined,
-    };
-    
-    const response = await axios.get<T>(url, config);
-<<<<<<< HEAD
-<<<<<<< HEAD
-    
-=======
->>>>>>> a380730 (Initial deployment)
-=======
-    
->>>>>>> 37ba2d8 (Initial commit)
-    return transformResponse<T>(response);
-  } catch (error) {
-    console.error(`API error on GET ${endpoint}:`, error);
-    throw createApiError(error);
-  }
-}
-
-/**
- * Generic POST request function with improved error handling and response transformation
- */
-export async function apiPost<T>(endpoint: string, data?: any): Promise<T> {
-  try {
-    const url = endpoint.startsWith('http') ? endpoint : API_URL + endpoint;
-    const response = await axios.post<T>(url, data);
-    return transformResponse<T>(response);
-  } catch (error) {
-    console.error(`API error on POST ${endpoint}:`, error);
-    throw createApiError(error);
-  }
-}
-
-<<<<<<< HEAD
-<<<<<<< HEAD
-// ... (apiPut, apiDelete, and other functions remain the same) ...
-
-=======
->>>>>>> a380730 (Initial deployment)
-=======
-// ... (apiPut, apiDelete, and other functions remain the same) ...
-
->>>>>>> 37ba2d8 (Initial commit)
-/**
- * Generic PUT request function with improved error handling and response transformation
- */
-export async function apiPut<T>(endpoint: string, data?: any): Promise<T> {
-  try {
-    const url = endpoint.startsWith('http') ? endpoint : API_URL + endpoint;
-    const response = await axios.put<T>(url, data);
-    return transformResponse<T>(response);
-  } catch (error) {
-    console.error(`API error on PUT ${endpoint}:`, error);
-    throw createApiError(error);
-  }
-}
-
-/**
- * Generic DELETE request function with improved error handling
- */
-export async function apiDelete<T>(endpoint: string): Promise<T> {
-  try {
-    const url = endpoint.startsWith('http') ? endpoint : API_URL + endpoint;
-    const response = await axios.delete<T>(url);
-    return transformResponse<T>(response);
-  } catch (error) {
-    console.error(`API error on DELETE ${endpoint}:`, error);
-    throw createApiError(error);
-  }
-}
-
-/**
- * Helper to prepare query parameters, handling arrays and objects properly
- */
-const prepareQueryParams = (params: Record<string, any>): Record<string, string> => {
+const prepareQueryParams = (params: Record<string, unknown>): Record<string, string> => {
   const result: Record<string, string> = {};
   
   for (const [key, value] of Object.entries(params)) {
@@ -209,85 +93,255 @@ const prepareQueryParams = (params: Record<string, any>): Record<string, string>
     }
     
     if (Array.isArray(value)) {
-<<<<<<< HEAD
-<<<<<<< HEAD
-      continue;
+      // Handle arrays by joining with comma for single parameter
+      if (value.length > 0) {
+        result[key] = value.join(',');
+      }
     } else if (typeof value === 'object') {
+      // Stringify objects
       result[key] = JSON.stringify(value);
     } else {
-=======
-      // For arrays, we keep the original key multiple times
-      // This will result in ?key=value1&key=value2 format
-      // (most APIs support this format for array parameters)
-=======
->>>>>>> 37ba2d8 (Initial commit)
-      continue;
-    } else if (typeof value === 'object') {
-      result[key] = JSON.stringify(value);
-    } else {
-<<<<<<< HEAD
-      // For primitive values, just convert to string
->>>>>>> a380730 (Initial deployment)
-=======
->>>>>>> 37ba2d8 (Initial commit)
+      // Convert primitives to string
       result[key] = String(value);
     }
   }
   
   return result;
-<<<<<<< HEAD
-<<<<<<< HEAD
 };
+
+/**
+ * Enhanced GET request with improved error handling and logging
+ */
+export async function apiGet<T>(endpoint: string, params?: Record<string, unknown>): Promise<T> {
+  try {
+    const url = endpoint.startsWith('http') ? endpoint : API_URL + endpoint;
+    
+    const config: AxiosRequestConfig = {
+      params: params ? prepareQueryParams(params) : undefined,
+      timeout: 30000, // 30 second timeout
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    };
+    
+    // Enhanced development logging
+    if (import.meta.env.DEV) {
+      console.log(`🚀 API GET: ${url}`, {
+        params: config.params,
+        fullUrl: `${url}${config.params ? '?' + new URLSearchParams(config.params as Record<string, string>).toString() : ''}`
+      });
+    }
+    
+    const response = await axios.get<T>(url, config);
+    
+    // Log successful responses in development
+    if (import.meta.env.DEV) {
+      console.log(`✅ API GET Success: ${url}`, response.status);
+    }
+    
+    return transformResponse<T>(response);
+  } catch (error) {
+    console.error(`❌ API GET Error: ${endpoint}`, error);
+    throw createApiError(error);
+  }
+}
+
+/**
+ * Enhanced POST request with improved error handling
+ */
+export async function apiPost<T>(endpoint: string, data?: unknown): Promise<T> {
+  try {
+    const url = endpoint.startsWith('http') ? endpoint : API_URL + endpoint;
+    
+    const config: AxiosRequestConfig = {
+      timeout: 30000,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    };
+    
+    if (import.meta.env.DEV) {
+      console.log(`🚀 API POST: ${url}`, data ? 'with payload' : 'no payload');
+    }
+    
+    const response = await axios.post<T>(url, data, config);
+    
+    if (import.meta.env.DEV) {
+      console.log(`✅ API POST Success: ${url}`, response.status);
+    }
+    
+    return transformResponse<T>(response);
+  } catch (error) {
+    console.error(`❌ API POST Error: ${endpoint}`, error);
+    throw createApiError(error);
+  }
+}
+
+/**
+ * Enhanced PUT request
+ */
+export async function apiPut<T>(endpoint: string, data?: unknown): Promise<T> {
+  try {
+    const url = endpoint.startsWith('http') ? endpoint : API_URL + endpoint;
+    
+    const config: AxiosRequestConfig = {
+      timeout: 30000,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    };
+    
+    if (import.meta.env.DEV) {
+      console.log(`🚀 API PUT: ${url}`);
+    }
+    
+    const response = await axios.put<T>(url, data, config);
+    
+    if (import.meta.env.DEV) {
+      console.log(`✅ API PUT Success: ${url}`, response.status);
+    }
+    
+    return transformResponse<T>(response);
+  } catch (error) {
+    console.error(`❌ API PUT Error: ${endpoint}`, error);
+    throw createApiError(error);
+  }
+}
+
+/**
+ * Enhanced DELETE request
+ */
+export async function apiDelete<T>(endpoint: string): Promise<T> {
+  try {
+    const url = endpoint.startsWith('http') ? endpoint : API_URL + endpoint;
+    
+    const config: AxiosRequestConfig = {
+      timeout: 30000,
+      headers: {
+        'Accept': 'application/json',
+      },
+    };
+    
+    if (import.meta.env.DEV) {
+      console.log(`🚀 API DELETE: ${url}`);
+    }
+    
+    const response = await axios.delete<T>(url, config);
+    
+    if (import.meta.env.DEV) {
+      console.log(`✅ API DELETE Success: ${url}`, response.status);
+    }
+    
+    return transformResponse<T>(response);
+  } catch (error) {
+    console.error(`❌ API DELETE Error: ${endpoint}`, error);
+    throw createApiError(error);
+  }
+}
 
 /**
  * Create an issue for a specific rule
  */
 export const createIssue = async (ruleId: string, payload: CreateIssuePayload): Promise<CreateIssueResponse> => {
-  const response = await apiPost<CreateIssueResponse>(CREATE_ISSUE(ruleId), payload);
-  return response;
+  const endpoint = `/rules/${ruleId}/issues`;
+  return await apiPost<CreateIssueResponse>(endpoint, payload);
 };
 
 /**
- * Configure axios defaults
+ * Health check endpoint
  */
-axios.defaults.timeout = 30000; // 30 second timeout
+export const healthCheck = async (): Promise<{ status: string; version?: string }> => {
+  return await apiGet<{ status: string; version?: string }>('/health');
+};
+
+/**
+ * Configure axios defaults and interceptors
+ */
+axios.defaults.timeout = 30000;
+axios.defaults.headers.common['Accept'] = 'application/json';
 axios.defaults.headers.common['Content-Type'] = 'application/json';
 
-// Interceptors remain the same
+// Request interceptor for logging and auth
+axios.interceptors.request.use(
+  (config) => {
+    // Add any auth headers here if needed
+    // config.headers.Authorization = `Bearer ${token}`;
+    
+    // Add request ID for tracing
+    config.headers['X-Request-ID'] = `saint-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Development logging
+    if (import.meta.env.DEV) {
+      console.log('📤 Request:', {
+        method: config.method?.toUpperCase(),
+        url: config.url,
+        headers: config.headers,
+        params: config.params
+      });
+    }
+    
+    return config;
+  },
+  (error) => {
+    console.error('Request interceptor error:', error);
+    return Promise.reject(error);
+  }
+);
 
+// Response interceptor for global error handling
+axios.interceptors.response.use(
+  (response) => {
+    // Development logging
+    if (import.meta.env.DEV) {
+      console.log('📥 Response:', {
+        status: response.status,
+        url: response.config?.url,
+        headers: response.headers
+      });
+    }
+    return response;
+  },
+  (error) => {
+    // Enhanced error logging
+    if (import.meta.env.DEV) {
+      console.error('📥 Response Error:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        url: error.config?.url,
+        method: error.config?.method,
+        data: error.response?.data
+      });
+    }
+    
+    // Global error handling
+    if (error.response?.status === 401) {
+      // Handle unauthorized access
+      console.warn('Unauthorized access detected');
+      // Could dispatch auth logout action here
+    } else if (error.response?.status >= 500) {
+      // Handle server errors
+      console.error('Server error detected:', error.response.status);
+    } else if (!error.response) {
+      // Handle network errors
+      console.error('Network error detected');
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
+// Export API client object
 export default {
   get: apiGet,
   post: apiPost,
   put: apiPut,
   delete: apiDelete,
-=======
->>>>>>> a380730 (Initial deployment)
-=======
+  healthCheck,
+  createIssue,
 };
 
-/**
- * Create an issue for a specific rule
- */
-export const createIssue = async (ruleId: string, payload: CreateIssuePayload): Promise<CreateIssueResponse> => {
-  const response = await apiPost<CreateIssueResponse>(CREATE_ISSUE(ruleId), payload);
-  return response;
-<<<<<<< HEAD
->>>>>>> 23a6656 (Feature/issue creator)
-=======
-};
-
-/**
- * Configure axios defaults
- */
-axios.defaults.timeout = 30000; // 30 second timeout
-axios.defaults.headers.common['Content-Type'] = 'application/json';
-
-// Interceptors remain the same
-
-export default {
-  get: apiGet,
-  post: apiPost,
-  put: apiPut,
-  delete: apiDelete,
->>>>>>> 37ba2d8 (Initial commit)
-};
+// Export API URL for use in other parts of the application
+export { API_URL };
