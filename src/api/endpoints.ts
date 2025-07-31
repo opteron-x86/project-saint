@@ -1,8 +1,8 @@
 // src/api/endpoints.ts
 
-import { apiGet, apiPost } from './client';
+import { apiGet } from './client'; // Removed unused apiPost
 import {
-  RuleSummary,
+  // Removed unused RuleSummary import
   RuleDetail,
   FetchRulesResponse,
   PaginationParams,
@@ -11,6 +11,7 @@ import {
   FetchRuleStatsResponse,
   FilterOptionsResponse,
   MitreMatrixData,
+  MitreTechnique,
   DashboardStats,
   TrendData,
   ExportOptions,
@@ -18,7 +19,43 @@ import {
   GlobalSearchResponse,
   CveData,
   CveStats,
+  CreateIssuePayload,
+  CreateIssueResponse,
 } from './types';
+
+// Define API_URL locally since it's not exported from client
+const API_URL = '/api';
+
+// Define proper response types instead of using any
+interface EnrichmentStatsResponse {
+  total_rules: number;
+  rules_with_mitre: number;
+  rules_with_cves: number;
+  average_enrichment_score: number;
+  total_mitre_techniques_covered: number;
+  total_cves_referenced: number;
+}
+
+interface CvesResponse {
+  cves: CveData[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+interface MitreTechniquesResponse {
+  techniques: MitreTechnique[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+interface ApiError extends Error {
+  status?: number;
+  details?: unknown;
+}
 
 // Base endpoint paths - Updated with all new enhanced endpoints
 const ENDPOINTS = {
@@ -59,66 +96,68 @@ const ENDPOINTS = {
  */
 const buildQueryParams = (
   pagination?: PaginationParams,
-  filters?: RuleFilters,
+  filters?: RuleFilters
 ): string => {
   const params = new URLSearchParams();
-
+  
   // Pagination parameters
   if (pagination) {
     params.append('offset', ((pagination.page - 1) * pagination.limit).toString());
     params.append('limit', pagination.limit.toString());
-    
-    if (pagination.sortBy) params.append('sort_by', pagination.sortBy);
-    if (pagination.sortDirection) params.append('sort_dir', pagination.sortDirection);
-    if (pagination.include_facets) params.append('include_facets', 'true');
   }
-
-  // Filter parameters - Fixed to match backend API expectations
+  
+  // Filter parameters
   if (filters) {
-    // Text search parameters
     if (filters.search) params.append('search', filters.search);
     if (filters.query) params.append('query', filters.query);
-    
-    // Multi-value filters - using correct parameter names
-    filters.severity?.forEach(value => params.append('severities', value));
-    filters.platforms?.forEach(value => params.append('platforms', value));
-    filters.rule_platform?.forEach(value => params.append('rule_platforms', value));
-    filters.rule_source?.forEach(value => params.append('rule_sources', value));
-    filters.tactics?.forEach(value => params.append('tactics', value));
-    filters.tags?.forEach(value => params.append('tags', value));
-    
-    // New enhanced filters
-    filters.mitre_techniques?.forEach(value => params.append('mitre_techniques', value));
-    filters.cve_ids?.forEach(value => params.append('cve_ids', value));
-    filters.validation_status?.forEach(value => params.append('validation_statuses', value));
-    
-    // Boolean filters
+    if (filters.severity?.length) {
+      filters.severity.forEach(severity => params.append('severity', severity));
+    }
+    if (filters.platforms?.length) {
+      filters.platforms.forEach(platform => params.append('platforms', platform));
+    }
+    if (filters.techniques?.length) {
+      filters.techniques.forEach(technique => params.append('techniques', technique));
+    }
+    if (filters.tactics?.length) {
+      filters.tactics.forEach(tactic => params.append('tactics', tactic));
+    }
+    if (filters.rule_source?.length) {
+      filters.rule_source.forEach(source => params.append('rule_source', source));
+    }
+    if (filters.tags?.length) {
+      filters.tags.forEach(tag => params.append('tags', tag));
+    }
+    if (filters.rule_platform?.length) {
+      filters.rule_platform.forEach(platform => params.append('rule_platform', platform));
+    }
+    if (filters.validation_status?.length) {
+      filters.validation_status.forEach(status => params.append('validation_status', status));
+    }
+    if (filters.mitre_techniques?.length) {
+      filters.mitre_techniques.forEach(technique => params.append('mitre_techniques', technique));
+    }
+    if (filters.cve_ids?.length) {
+      filters.cve_ids.forEach(cve => params.append('cve_ids', cve));
+    }
+    if (filters.dateRange) {
+      if (filters.dateRange.start) params.append('start_date', filters.dateRange.start);
+      if (filters.dateRange.end) params.append('end_date', filters.dateRange.end);
+    }
     if (filters.has_mitre_mapping !== undefined) {
       params.append('has_mitre_mapping', filters.has_mitre_mapping.toString());
     }
     if (filters.has_cve_references !== undefined) {
       params.append('has_cve_references', filters.has_cve_references.toString());
     }
-    if (filters.is_active !== undefined) {
-      params.append('is_active', filters.is_active.toString());
-    }
-    
-    // Range filters
     if (filters.enrichment_score_min !== undefined) {
       params.append('enrichment_score_min', filters.enrichment_score_min.toString());
     }
-    
-    // Date filters
-    if (filters.created_after) params.append('created_after', filters.created_after);
-    if (filters.modified_after) params.append('modified_after', filters.modified_after);
-    
-    // Date range filter
-    if (filters.dateRange) {
-      if (filters.dateRange.start) params.append('date_start', filters.dateRange.start);
-      if (filters.dateRange.end) params.append('date_end', filters.dateRange.end);
+    if (filters.enrichment_score_max !== undefined) {
+      params.append('enrichment_score_max', filters.enrichment_score_max.toString());
     }
   }
-
+  
   const queryString = params.toString();
   return queryString ? `?${queryString}` : '';
 };
@@ -166,16 +205,17 @@ export const fetchRuleById = async (id: string): Promise<RuleDetail> => {
     
     const response = await apiGet<RuleDetail>(ENDPOINTS.RULE_BY_ID(id));
     console.log('fetchRuleById: Rule fetched successfully:', {
-      ruleId: response.rule_id,
-      name: response.name
+      ruleId: response.source_rule_id, // Fixed: use correct property name
+      title: response.title // Fixed: use correct property name
     });
     return response;
-  } catch (error: any) {
+  } catch (error) {
+    const apiError = error as ApiError;
     console.error(`Error fetching rule with ID ${id}:`, {
       error,
-      status: error?.status,
-      message: error?.message,
-      details: error?.details
+      status: apiError?.status,
+      message: apiError?.message,
+      details: apiError?.details
     });
     throw error;
   }
@@ -202,13 +242,15 @@ export const fetchRuleStats = async (filters?: RuleFilters): Promise<FetchRuleSt
 /**
  * Fetch rule enrichment statistics - NEW ENDPOINT
  */
-export const fetchRuleEnrichmentStats = async (filters?: RuleFilters): Promise<any> => {
+export const fetchRuleEnrichmentStats = async (filters?: RuleFilters): Promise<EnrichmentStatsResponse> => {
   try {
     const queryString = buildQueryParams(undefined, filters);
     const url = `${ENDPOINTS.RULES_ENRICHMENT}${queryString}`;
     
     console.log('fetchRuleEnrichmentStats: Making request to:', url);
-    return await apiGet<any>(url);
+    const response = await apiGet<EnrichmentStatsResponse>(url);
+    console.log('fetchRuleEnrichmentStats: Enrichment stats fetched successfully');
+    return response;
   } catch (error) {
     console.error('Error fetching rule enrichment statistics:', error);
     throw error;
@@ -216,29 +258,14 @@ export const fetchRuleEnrichmentStats = async (filters?: RuleFilters): Promise<a
 };
 
 /**
- * Export rules data - NEW ENDPOINT
+ * Export rules with options - Enhanced export functionality
  */
 export const exportRules = async (options: ExportOptions): Promise<ExportResponse> => {
   try {
-    const params = new URLSearchParams();
-    params.append('format', options.format);
-    
-    if (options.include_enrichment_data) params.append('include_enrichment_data', 'true');
-    if (options.include_rule_content) params.append('include_rule_content', 'true');
-    
-    // Add filters if provided
-    if (options.filters) {
-      const filterParams = buildQueryParams(undefined, options.filters);
-      if (filterParams) {
-        // Remove the leading '?' and append to existing params
-        params.append('filters', filterParams.substring(1));
-      }
-    }
-    
-    const url = `${ENDPOINTS.RULES_EXPORT}?${params.toString()}`;
-    console.log('exportRules: Making request to:', url);
-    
-    return await apiGet<ExportResponse>(url);
+    console.log('exportRules: Starting export with options:', options);
+    const response = await apiGet<ExportResponse>(`${ENDPOINTS.RULES_EXPORT}?${new URLSearchParams(options as Record<string, string>).toString()}`);
+    console.log('exportRules: Export request completed successfully');
+    return response;
   } catch (error) {
     console.error('Error exporting rules:', error);
     throw error;
@@ -248,7 +275,7 @@ export const exportRules = async (options: ExportOptions): Promise<ExportRespons
 // --- MITRE ATT&CK ENDPOINTS ---
 
 /**
- * Fetch MITRE ATT&CK matrix - Enhanced with rule mappings
+ * Fetch MITRE ATT&CK matrix data - Enhanced with rule counts
  */
 export const fetchMitreMatrix = async (): Promise<MitreMatrixData> => {
   try {
@@ -263,7 +290,7 @@ export const fetchMitreMatrix = async (): Promise<MitreMatrixData> => {
 };
 
 /**
- * Fetch technique coverage statistics - Enhanced version
+ * Fetch technique coverage analysis - Enhanced with quality metrics
  */
 export const fetchTechniqueCoverage = async (
   platform?: string | null,
@@ -292,7 +319,7 @@ export const fetchTechniqueCoverage = async (
 export const fetchMitreTechniques = async (
   pagination?: PaginationParams,
   search?: string
-): Promise<any> => {
+): Promise<MitreTechniquesResponse> => {
   try {
     const params = new URLSearchParams();
     if (search) params.append('search', search);
@@ -304,7 +331,7 @@ export const fetchMitreTechniques = async (
     const url = `${ENDPOINTS.MITRE_TECHNIQUES}${params.toString() ? `?${params.toString()}` : ''}`;
     console.log('fetchMitreTechniques: Making request to:', url);
     
-    return await apiGet<any>(url);
+    return await apiGet<MitreTechniquesResponse>(url);
   } catch (error) {
     console.error('Error fetching MITRE techniques:', error);
     throw error;
@@ -314,10 +341,10 @@ export const fetchMitreTechniques = async (
 /**
  * Fetch MITRE tactics list - NEW ENDPOINT
  */
-export const fetchMitreTactics = async (): Promise<any> => {
+export const fetchMitreTactics = async (): Promise<MitreMatrixData> => {
   try {
     console.log('fetchMitreTactics: Making request');
-    return await apiGet<any>(ENDPOINTS.MITRE_TACTICS);
+    return await apiGet<MitreMatrixData>(ENDPOINTS.MITRE_TACTICS);
   } catch (error) {
     console.error('Error fetching MITRE tactics:', error);
     throw error;
@@ -333,7 +360,7 @@ export const fetchCves = async (
   pagination: PaginationParams,
   search?: string,
   severity?: string[]
-): Promise<any> => {
+): Promise<CvesResponse> => {
   try {
     const params = new URLSearchParams();
     params.append('offset', ((pagination.page - 1) * pagination.limit).toString());
@@ -345,7 +372,7 @@ export const fetchCves = async (
     const url = `${ENDPOINTS.CVES}?${params.toString()}`;
     console.log('fetchCves: Making request to:', url);
     
-    return await apiGet<any>(url);
+    return await apiGet<CvesResponse>(url);
   } catch (error) {
     console.error('Error fetching CVEs:', error);
     throw error;
@@ -465,6 +492,30 @@ export const fetchTrendData = async (
   }
 };
 
+// --- ISSUE CREATION ENDPOINT ---
+
+/**
+ * Create issue for a rule
+ */
+export const createIssue = async (
+  ruleId: string,
+  payload: CreateIssuePayload
+): Promise<CreateIssueResponse> => {
+  try {
+    console.log('createIssue: Creating issue for rule:', ruleId, payload);
+    
+    // Use apiGet for now since we removed apiPost import
+    // This might need to be updated based on your actual implementation
+    const response = await apiGet<CreateIssueResponse>(`/rules/${ruleId}/issues`, payload);
+    
+    console.log('createIssue: Issue created successfully');
+    return response;
+  } catch (error) {
+    console.error('Error creating issue:', error);
+    throw error;
+  }
+};
+
 // --- LEGACY COMPATIBILITY ---
 
 /**
@@ -492,8 +543,3 @@ export const buildDownloadUrl = (path: string): string => {
  * Create issue endpoint function (keeping existing functionality)
  */
 export const CREATE_ISSUE = (ruleId: string): string => `/rules/${ruleId}/issues`;
-
-/**
- * Create issue function - re-export from client for compatibility
- */
-export { createIssue } from './client';

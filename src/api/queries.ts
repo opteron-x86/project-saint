@@ -49,6 +49,7 @@ import {
   TechniquesCoverageResponse,
   FilterOptionsResponse,
   MitreMatrixData,
+  MitreTechnique,
   DashboardStats,
   TrendData,
   ExportOptions,
@@ -59,6 +60,21 @@ import {
   CreateIssuePayload,
   CreateIssueResponse,
 } from './types';
+
+// Define proper error type instead of any
+interface QueryError extends Error {
+  status?: number;
+}
+
+// Define proper types for enrichment stats response
+interface EnrichmentStatsResponse {
+  total_rules: number;
+  rules_with_mitre: number;
+  rules_with_cves: number;
+  average_enrichment_score: number;
+  total_mitre_techniques_covered: number;
+  total_cves_referenced: number;
+}
 
 // --- ENHANCED QUERY KEYS ---
 export const queryKeys = {
@@ -156,9 +172,9 @@ export const useRulesQuery = (
       
       return result;
     },
-    retry: (failureCount, error: any) => {
+    retry: (failureCount, error: QueryError) => {
       // Don't retry on 4xx errors (client errors)
-      if (error?.status >= 400 && error?.status < 500) {
+      if (error?.status && error.status >= 400 && error.status < 500) {
         return false;
       }
       // Retry up to 2 times for server errors
@@ -194,14 +210,14 @@ export const useRuleQuery = (
       
       console.log('useRuleQuery: Successfully fetched rule:', {
         id: result.id,
-        rule_id: result.rule_id,
-        name: result.name
+        source_rule_id: result.source_rule_id, // Fixed: use correct property name
+        title: result.title // Fixed: use correct property name
       });
       
       return result;
     },
     enabled: !!id,
-    retry: (failureCount, error: any) => {
+    retry: (failureCount, error: QueryError) => {
       console.log('useRuleQuery: Retry attempt:', {
         failureCount,
         errorStatus: error?.status,
@@ -213,20 +229,13 @@ export const useRuleQuery = (
         return false;
       }
       // Don't retry on other 4xx errors (client errors)
-      if (error?.status >= 400 && error?.status < 500) {
+      if (error?.status && error.status >= 400 && error.status < 500) {
         return false;
       }
       // Retry up to 2 times for server errors
       return failureCount < 2;
     },
     staleTime: 10 * 60 * 1000,
-    onError: (error: any) => {
-      console.error('useRuleQuery: Query failed:', {
-        ruleId: id,
-        error: error?.message,
-        status: error?.status
-      });
-    },
     ...options,
   });
 };
@@ -252,13 +261,13 @@ export const useRuleStatsQuery = (
 };
 
 /**
- * NEW: Rule enrichment statistics query
+ * Rule enrichment statistics query with proper typing
  */
 export const useRuleEnrichmentStatsQuery = (
   filters?: RuleFilters,
-  options?: UseQueryOptions<any, Error>
+  options?: UseQueryOptions<EnrichmentStatsResponse, Error>
 ) => {
-  return useQuery<any, Error>({
+  return useQuery<EnrichmentStatsResponse, Error>({
     queryKey: queryKeys.ruleEnrichmentStats(filters),
     queryFn: async () => {
       console.log('useRuleEnrichmentStatsQuery: Fetching enrichment stats');
@@ -285,14 +294,13 @@ export const useMitreMatrixQuery = (
       console.log('useMitreMatrixQuery: Matrix fetched successfully');
       return result;
     },
-    staleTime: 60 * 60 * 1000, // 1 hour - MITRE matrix changes rarely
-    gcTime: 2 * 60 * 60 * 1000, // 2 hours
+    staleTime: 15 * 60 * 1000, // 15 minutes - MITRE data is relatively stable
     ...options,
   });
 };
 
 /**
- * Enhanced technique coverage query
+ * Enhanced techniques coverage query
  */
 export const useTechniqueCoverageQuery = (
   platform?: string | null,
@@ -302,9 +310,9 @@ export const useTechniqueCoverageQuery = (
   return useQuery<TechniquesCoverageResponse, Error>({
     queryKey: queryKeys.techniquesCoverage(platform, rulePlatform),
     queryFn: async () => {
-      console.log('useTechniqueCoverageQuery: Fetching coverage for:', { platform, rulePlatform });
+      console.log('useTechniqueCoverageQuery: Fetching coverage data');
       const result = await fetchTechniqueCoverage(platform, rulePlatform);
-      console.log('useTechniqueCoverageQuery: Coverage fetched successfully');
+      console.log('useTechniqueCoverageQuery: Coverage data fetched successfully');
       return result;
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
@@ -313,32 +321,32 @@ export const useTechniqueCoverageQuery = (
 };
 
 /**
- * NEW: MITRE techniques list query
+ * MITRE techniques query with pagination
  */
 export const useMitreTechniquesQuery = (
-  pagination?: PaginationParams,
+  pagination: PaginationParams,
   search?: string,
-  options?: UseQueryOptions<any, Error>
+  options?: UseQueryOptions<{ techniques: MitreTechnique[]; total: number }, Error>
 ) => {
-  return useQuery<any, Error>({
+  return useQuery<{ techniques: MitreTechnique[]; total: number }, Error>({
     queryKey: queryKeys.mitreTechniques(pagination, search),
     queryFn: () => fetchMitreTechniques(pagination, search),
     placeholderData: keepPreviousData,
-    staleTime: 30 * 60 * 1000, // 30 minutes
+    staleTime: 15 * 60 * 1000, // 15 minutes
     ...options,
   });
 };
 
 /**
- * NEW: MITRE tactics query
+ * MITRE tactics query
  */
 export const useMitreTacticsQuery = (
-  options?: UseQueryOptions<any, Error>
+  options?: UseQueryOptions<MitreMatrixData, Error>
 ) => {
-  return useQuery<any, Error>({
+  return useQuery<MitreMatrixData, Error>({
     queryKey: queryKeys.mitreTactics(),
     queryFn: fetchMitreTactics,
-    staleTime: 60 * 60 * 1000, // 1 hour
+    staleTime: 15 * 60 * 1000, // 15 minutes
     ...options,
   });
 };
@@ -346,15 +354,15 @@ export const useMitreTacticsQuery = (
 // --- CVE QUERY HOOKS ---
 
 /**
- * NEW: CVEs search query
+ * CVEs query with pagination and filtering
  */
 export const useCvesQuery = (
   pagination: PaginationParams,
   search?: string,
   severity?: string[],
-  options?: UseQueryOptions<any, Error>
+  options?: UseQueryOptions<{ cves: CveData[]; total: number }, Error>
 ) => {
-  return useQuery<any, Error>({
+  return useQuery<{ cves: CveData[]; total: number }, Error>({
     queryKey: queryKeys.cves(pagination, search, severity),
     queryFn: () => fetchCves(pagination, search, severity),
     placeholderData: keepPreviousData,
@@ -364,23 +372,23 @@ export const useCvesQuery = (
 };
 
 /**
- * NEW: Single CVE query
+ * Single CVE query
  */
 export const useCveQuery = (
-  id: string | null,
+  id: string,
   options?: UseQueryOptions<CveData, Error>
 ) => {
   return useQuery<CveData, Error>({
-    queryKey: queryKeys.cveDetail(id!),
-    queryFn: () => fetchCveById(id!),
+    queryKey: queryKeys.cveDetail(id),
+    queryFn: () => fetchCveById(id),
     enabled: !!id,
-    staleTime: 30 * 60 * 1000, // 30 minutes - CVE data changes rarely
+    staleTime: 30 * 60 * 1000, // 30 minutes - CVE data doesn't change frequently
     ...options,
   });
 };
 
 /**
- * NEW: CVE statistics query
+ * CVE statistics query
  */
 export const useCveStatsQuery = (
   options?: UseQueryOptions<CveStats, Error>
@@ -388,7 +396,7 @@ export const useCveStatsQuery = (
   return useQuery<CveStats, Error>({
     queryKey: queryKeys.cveStats(),
     queryFn: fetchCveStats,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 10 * 60 * 1000, // 10 minutes
     ...options,
   });
 };
@@ -396,27 +404,21 @@ export const useCveStatsQuery = (
 // --- FILTER AND SEARCH QUERY HOOKS ---
 
 /**
- * Enhanced filter options query
+ * Filter options query
  */
 export const useFilterOptionsQuery = (
   options?: UseQueryOptions<FilterOptionsResponse, Error>
 ) => {
   return useQuery<FilterOptionsResponse, Error>({
     queryKey: queryKeys.filterOptions(),
-    queryFn: async () => {
-      console.log('useFilterOptionsQuery: Fetching filter options');
-      const result = await fetchFilterOptions();
-      console.log('useFilterOptionsQuery: Options fetched successfully');
-      return result;
-    },
-    staleTime: 15 * 60 * 1000, // 15 minutes - filter options change infrequently
-    gcTime: 30 * 60 * 1000, // 30 minutes
+    queryFn: fetchFilterOptions,
+    staleTime: 30 * 60 * 1000, // 30 minutes - filter options are relatively stable
     ...options,
   });
 };
 
 /**
- * NEW: Global search query
+ * Global search query
  */
 export const useGlobalSearchQuery = (
   query: string,
@@ -437,7 +439,7 @@ export const useGlobalSearchQuery = (
 // --- ANALYTICS QUERY HOOKS ---
 
 /**
- * NEW: Dashboard data query
+ * Dashboard data query
  */
 export const useDashboardDataQuery = (
   options?: UseQueryOptions<DashboardStats, Error>
@@ -456,7 +458,7 @@ export const useDashboardDataQuery = (
 };
 
 /**
- * NEW: Trend data query
+ * Trend data query
  */
 export const useTrendDataQuery = (
   period?: string,
@@ -510,7 +512,7 @@ export const useCreateIssueMutation = (
 export const useCreateIssue = useCreateIssueMutation;
 
 /**
- * NEW: Export rules mutation
+ * Export rules mutation
  */
 export const useExportRulesMutation = (
   options?: UseMutationOptions<ExportResponse, Error, ExportOptions>
