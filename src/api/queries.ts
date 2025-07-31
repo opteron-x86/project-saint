@@ -181,13 +181,52 @@ export const useRuleQuery = (
   return useQuery<RuleDetail, Error>({
     queryKey: queryKeys.ruleDetail(id!),
     queryFn: async () => {
-      console.log('useRuleQuery: Fetching rule:', id);
-      const result = await fetchRuleById(id!);
-      console.log('useRuleQuery: Rule fetched successfully');
+      if (!id) {
+        throw new Error('Rule ID is required');
+      }
+      
+      console.log('useRuleQuery: Starting fetch for rule:', {
+        id,
+        timestamp: new Date().toISOString()
+      });
+      
+      const result = await fetchRuleById(id);
+      
+      console.log('useRuleQuery: Successfully fetched rule:', {
+        id: result.id,
+        rule_id: result.rule_id,
+        name: result.name
+      });
+      
       return result;
     },
     enabled: !!id,
-    staleTime: 10 * 60 * 1000, // 10 minutes - individual rules change less frequently
+    retry: (failureCount, error: any) => {
+      console.log('useRuleQuery: Retry attempt:', {
+        failureCount,
+        errorStatus: error?.status,
+        shouldRetry: error?.status !== 404 && failureCount < 2
+      });
+      
+      // Don't retry on 404 errors (rule not found)
+      if (error?.status === 404) {
+        return false;
+      }
+      // Don't retry on other 4xx errors (client errors)
+      if (error?.status >= 400 && error?.status < 500) {
+        return false;
+      }
+      // Retry up to 2 times for server errors
+      return failureCount < 2;
+    },
+    staleTime: 10 * 60 * 1000,
+    onError: (error: any) => {
+      console.error('useRuleQuery: Query failed:', {
+        ruleId: id,
+        error: error?.message,
+        status: error?.status
+      });
+    },
     ...options,
   });
 };

@@ -158,12 +158,25 @@ export const fetchRules = async (
  */
 export const fetchRuleById = async (id: string): Promise<RuleDetail> => {
   try {
-    console.log('fetchRuleById: Fetching rule:', id);
+    console.log('fetchRuleById: Fetching rule:', {
+      id,
+      type: typeof id,
+      isNumeric: /^\d+$/.test(id)
+    });
+    
     const response = await apiGet<RuleDetail>(ENDPOINTS.RULE_BY_ID(id));
-    console.log('fetchRuleById: Rule fetched successfully');
+    console.log('fetchRuleById: Rule fetched successfully:', {
+      ruleId: response.rule_id,
+      name: response.name
+    });
     return response;
-  } catch (error) {
-    console.error(`Error fetching rule with ID ${id}:`, error);
+  } catch (error: any) {
+    console.error(`Error fetching rule with ID ${id}:`, {
+      error,
+      status: error?.status,
+      message: error?.message,
+      details: error?.details
+    });
     throw error;
   }
 };
