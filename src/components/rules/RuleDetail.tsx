@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box, Typography, Divider, Chip, Stack, IconButton, Tooltip, Tab, Tabs, Link, useTheme, Paper,
-  useMediaQuery, Toolbar, Button,
+  useMediaQuery, Toolbar, Button, Alert, CircularProgress, LinearProgress,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ShareIcon from '@mui/icons-material/Share';
@@ -14,24 +14,27 @@ import InfoIcon from '@mui/icons-material/Info';
 import SecurityIcon from '@mui/icons-material/Security';
 import DataObjectIcon from '@mui/icons-material/DataObject';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import HubIcon from '@mui/icons-material/Hub'; // For Techniques
-import BubbleChartIcon from '@mui/icons-material/BubbleChart'; // For Tactics
+import HubIcon from '@mui/icons-material/Hub';
+import BubbleChartIcon from '@mui/icons-material/BubbleChart';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import HighlightOffIcon from '@mui/icons-material/HighlightOff';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
-import BugReportIcon from '@mui/icons-material/BugReport'; // For Create Issue
+import BugReportIcon from '@mui/icons-material/BugReport';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import { alpha } from '@mui/material/styles';
 import toast from 'react-hot-toast';
 
-
+// API and Types
 import { RuleDetail as RuleDetailType, RuleSeverity as RuleSeverityEnum } from '../../api/types';
-import { StatusBadge } from '../common';
+import { useMitreMatrixQuery } from '@/api/queries';
+import { useRuleStore } from '@/store';
+
+// Components
+import { StatusBadge, LoadingIndicator, ErrorDisplay } from '../common';
 import { formatDateTime, formatQueryLanguage } from '../../utils/format';
 import { SEVERITY_DISPLAY } from '../../utils/constants';
 import RuleTagsDisplay from './RuleTagsDisplay';
-import { useMitreMatrixQuery } from '@/api/queries';
 import { CreateIssueModal } from './CreateIssueModal';
-import { useRuleStore } from '@/store'; // Import the rule store
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -49,35 +52,70 @@ const TabPanel: React.FC<TabPanelProps> = ({ children, value, index, ...other })
 
 interface DetailGridItemProps {
   label: string;
-  value?: string | number | null;
+  value?: string | number | boolean | null;
   children?: React.ReactNode;
   isStatus?: boolean;
   statusType?: string;
   fullWidthChildren?: boolean;
 }
-const DetailGridItem: React.FC<DetailGridItemProps> = ({ label, value, children, isStatus, statusType, fullWidthChildren }) => {
+
+const DetailGridItem: React.FC<DetailGridItemProps> = ({ 
+  label, 
+  value, 
+  children, 
+  isStatus, 
+  statusType, 
+  fullWidthChildren 
+}) => {
   if (value === undefined && value === null && !children) return null;
   const displayValue = value === null && !children ? '-' : value;
 
   return (
     <>
-      <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, gridColumn: '1 / span 1', pt:0.5, pr: 1, textAlign: 'right' }}>{label}:</Typography>
-      <Box sx={{ gridColumn: fullWidthChildren ? '2 / -1' : '2 / span 1', pt:0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+      <Typography 
+        variant="body2" 
+        color="text.secondary" 
+        sx={{ 
+          fontWeight: 500, 
+          gridColumn: '1 / span 1', 
+          pt: 0.5, 
+          pr: 1, 
+          textAlign: 'right' 
+        }}
+      >
+        {label}:
+      </Typography>
+      <Box sx={{ 
+        gridColumn: fullWidthChildren ? '2 / -1' : '2 / span 1', 
+        pt: 0.5, 
+        display: 'flex', 
+        flexWrap: 'wrap', 
+        gap: 0.5 
+      }}>
         {isStatus ? (
-          <StatusBadge label={String(displayValue ?? 'Unknown')} status={statusType || String(displayValue ?? 'unknown').toLowerCase()} size="small" />
+          <StatusBadge 
+            label={String(displayValue ?? 'Unknown')} 
+            status={statusType || String(displayValue ?? 'unknown').toLowerCase()} 
+            size="small" 
+          />
         ) : children ? (
           children
         ) : (
-          <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>{String(displayValue ?? '-')}</Typography>
+          <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+            {String(displayValue ?? '-')}
+          </Typography>
         )}
       </Box>
     </>
   );
 };
 
-
 interface RuleDetailProps {
-  rule: RuleDetailType | null;
+  ruleId?: string | null;
+  rule?: RuleDetailType | null;
+  isLoading?: boolean;
+  isError?: boolean;
+  error?: any;
   isBookmarked?: boolean;
   onClose?: () => void;
   onBookmark?: (ruleId: string) => void;
@@ -85,7 +123,11 @@ interface RuleDetailProps {
 }
 
 const RuleDetail: React.FC<RuleDetailProps> = ({
+  ruleId,
   rule,
+  isLoading = false,
+  isError = false,
+  error,
   isBookmarked = false,
   onClose,
   onBookmark,
@@ -94,24 +136,23 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [tabValue, setTabValue] = useState(0);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // MITRE data for tactics mapping
   const { data: mitreMatrixData } = useMitreMatrixQuery();
   const [tacticDetailsMap, setTacticDetailsMap] = useState<Record<string, { name: string; url?: string | null }>>({});
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  // --- FIX APPLIED HERE ---
-  // Get the action to add a rule to the recently viewed list.
+  // Store hooks
   const addRecentlyViewedRule = useRuleStore((state) => state.addRecentlyViewedRule);
 
-  // When the component displays a rule, add it to the recently viewed list.
+  // Add rule to recently viewed when component loads
   useEffect(() => {
     if (rule) {
       addRecentlyViewedRule(rule);
     }
   }, [rule, addRecentlyViewedRule]);
-  // --- END FIX ---
 
+  // Process rule-specific data with enhanced enrichment information
   const ruleSpecifics = useMemo(() => {
     if (!rule) return null;
 
@@ -120,7 +161,7 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
     const trinity = rule.trinitycyber_details;
 
     return {
-      severity: rule.severity || 'unknown', // Use the top-level severity
+      severity: rule.severity || 'unknown',
       query: elastic?.query || sentinel?.query || 'No detection logic available.',
       query_language: elastic?.language || (sentinel ? 'KQL' : 'unknown'),
       version: elastic?.version,
@@ -132,25 +173,36 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
       human_hash: trinity?.human_hash,
       cve: trinity?.cve || [],
       implementation: trinity?.implementation,
+      // New enrichment data
+      extracted_mitre: elastic?.extracted_mitre || sentinel?.extracted_mitre || trinity?.extracted_mitre || [],
+      extracted_cves: elastic?.extracted_cves || sentinel?.extracted_cves || trinity?.extracted_cves || [],
     };
   }, [rule]);
 
+  // Build tactics details map from MITRE matrix data
   useEffect(() => {
     if (mitreMatrixData && rule?.raw_rule?.tactics) {
       const newMap: Record<string, { name: string; url?: string | null }> = {};
-      const tacticIds = (Array.isArray(rule.raw_rule.tactics) ? rule.raw_rule.tactics : []) as string[];
+      const tacticIds = (Array.isArray(rule.raw_rule.tactics) ? 
+        rule.raw_rule.tactics : [rule.raw_rule.tactics]
+      ) as string[];
+      
       tacticIds.forEach(tacticId => {
-        const foundTactic = mitreMatrixData.find(t => t.id === tacticId || t.shortname === tacticId || t.stix_id === tacticId);
+        const foundTactic = mitreMatrixData.find(t => 
+          t.id === tacticId || t.shortname === tacticId || t.stix_id === tacticId
+        );
         if (foundTactic) {
           newMap[tacticId] = { name: foundTactic.name, url: foundTactic.url };
         } else {
-          newMap[tacticId] = { name: tacticId, url: `https://attack.mitre.org/tactics/${tacticId}` };
+          newMap[tacticId] = { 
+            name: tacticId, 
+            url: `https://attack.mitre.org/tactics/${tacticId}` 
+          };
         }
       });
       setTacticDetailsMap(newMap);
     }
   }, [mitreMatrixData, rule?.raw_rule?.tactics]);
-
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -165,14 +217,54 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
     });
   };
 
-  if (!rule || !ruleSpecifics) {
+  // Loading state
+  if (isLoading) {
     return (
-      <Box sx={{ p: 3, textAlign: 'center' }}>
-        <Typography variant="body2" color="text.secondary">No rule data to display.</Typography>
+      <Box sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <LoadingIndicator size={24} />
+            <Typography variant="h6">Loading rule details...</Typography>
+          </Box>
+          {onClose && (
+            <IconButton onClick={onClose}>
+              <CloseIcon />
+            </IconButton>
+          )}
+        </Box>
+        <LinearProgress />
       </Box>
     );
   }
 
+  // Error state
+  if (isError || !rule) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+          <Typography variant="h6">Error Loading Rule</Typography>
+          {onClose && (
+            <IconButton onClick={onClose}>
+              <CloseIcon />
+            </IconButton>
+          )}
+        </Box>
+        {isError && error ? (
+          <ErrorDisplay 
+            error={error} 
+            title="Failed to load rule details"
+            message="There was an error loading the rule data."
+          />
+        ) : (
+          <Alert severity="warning">
+            No rule data available to display.
+          </Alert>
+        )}
+      </Box>
+    );
+  }
+
+  // Extract rule data with fallbacks
   const {
     id, title, description, rule_source, created_date, modified_date, author,
     linked_techniques = [],
@@ -181,381 +273,437 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
     raw_rule,
     source_file_path,
     source_rule_id,
+    // New enrichment fields
+    has_mitre_mapping = false,
+    has_cve_references = false,
+    enrichment_score = 0,
   } = rule;
 
   const validation_status = (raw_rule as any)?.validation_status;
 
   const {
-    severity, query, query_language, version, risk_score, license, interval, tags, false_positives,
-    human_hash, cve, implementation
-  } = ruleSpecifics;
+    severity, query, query_language, version, risk_score, license, interval, 
+    tags, false_positives, human_hash, cve, implementation,
+    extracted_mitre, extracted_cves
+  } = ruleSpecifics!;
 
   const severityDisplay = SEVERITY_DISPLAY[severity as RuleSeverityEnum] || severity || 'Unknown';
-  const rawTacticsFromRule = (Array.isArray(raw_rule?.tactics) ? raw_rule.tactics : []) as string[];
-
-  let validationIcon = <HelpOutlineIcon fontSize="inherit" />;
-  let validationChipLabel = "Unknown";
-  let validationChipColor: "default" | "success" | "error" = "default";
-  if (validation_status?.toLowerCase() === 'validated') {
-    validationIcon = <CheckCircleOutlineIcon fontSize="inherit" />;
-    validationChipLabel = "Validated";
-    validationChipColor = "success";
-  } else if (validation_status?.toLowerCase() === 'not_validated') {
-    validationIcon = <HighlightOffIcon fontSize="inherit" />;
-    validationChipLabel = "Not Validated";
-    validationChipColor = "error";
-  }
-
+  const rawTacticsFromRule = (Array.isArray(raw_rule?.tactics) ? 
+    raw_rule.tactics : raw_rule?.tactics ? [raw_rule.tactics] : []
+  ) as string[];
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
-      <Toolbar sx={{boxShadow: 'none', minHeight: { xs: '56px', sm: '64px' }, p: '0 !important', m:0, visibility: 'hidden', pointerEvents: 'none' }} />
-      
-      <Box sx={{ p: 2, borderBottom: `1px solid ${theme.palette.divider}`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <Box sx={{pr: 1, overflow: 'hidden'}}>
-          <Tooltip title={title}>
-            <Typography variant="h6" fontWeight="bold" noWrap gutterBottom>{title}</Typography>
-          </Tooltip>
-          <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 0.5 }}>
-            <Chip label={rule_source} size="small" sx={{ height: 20, fontSize: '0.7rem', fontWeight: 500 }} />
-            <StatusBadge label={severityDisplay} status={severity.toLowerCase()} size="small" />
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
-              ID:
-            </Typography>
-            <Tooltip title={id}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                    {id}
-                </Typography>
-            </Tooltip>
-            <Tooltip title="Copy ID">
-              <IconButton size="small" onClick={() => handleCopyToClipboard(id, 'Rule ID copied to clipboard!')} sx={{ p: 0.25 }}>
-                <ContentCopyIcon sx={{ fontSize: '0.8rem' }} />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', pt:0.5, pl:1 }}>
-          {onBookmark && (
-            <Tooltip title={isBookmarked ? 'Remove bookmark' : 'Bookmark rule'}>
-              <IconButton size="small" onClick={() => onBookmark(id)} sx={{ color: isBookmarked ? theme.palette.warning.main : theme.palette.action.active }}>
-                {isBookmarked ? <BookmarkIcon fontSize="inherit"/> : <BookmarkBorderIcon fontSize="inherit"/>}
-              </IconButton>
-            </Tooltip>
-          )}
-          {onShare && (
-            <Tooltip title="Share rule">
-              <IconButton size="small" onClick={() => onShare(id)}><ShareIcon fontSize="inherit"/></IconButton>
-            </Tooltip>
-          )}
-          {onClose && (
-            <Tooltip title="Close"><IconButton size="small" onClick={onClose} sx={{ ml: 0.5 }}><CloseIcon fontSize="inherit"/></IconButton></Tooltip>
-          )}
-        </Box>
-      </Box>
-
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', px: isMobile ? 0: 2 }}>
-        <Tabs value={tabValue} onChange={handleTabChange} aria-label="rule detail tabs" variant={isMobile ? "fullWidth" : "scrollable"} scrollButtons="auto" allowScrollButtonsMobile>
-          <Tab icon={<InfoIcon fontSize="small" />} iconPosition="start" label="Overview" id="rule-tab-0" sx={{minHeight: 48, py:1, fontSize: '0.8rem'}}/>
-          <Tab icon={<CodeIcon fontSize="small" />} iconPosition="start" label="Query" id="rule-tab-1" sx={{minHeight: 48, py:1, fontSize: '0.8rem'}}/>
-          <Tab icon={<SecurityIcon fontSize="small" />} iconPosition="start" label="ATT&CK" id="rule-tab-2" sx={{minHeight: 48, py:1, fontSize: '0.8rem'}}/>
-          <Tab icon={<DataObjectIcon fontSize="small" />} iconPosition="start" label="Raw JSON" id="rule-tab-3" sx={{minHeight: 48, py:1, fontSize: '0.8rem'}}/>
-        </Tabs>
-      </Box>
-      <Box sx={{ flex: 1, overflowY: 'auto', px: isMobile ? 1.5 : 2.5 }}>
-        <TabPanel value={tabValue} index={0}> {/* Overview */}
-          <Typography variant="subtitle1" gutterBottom sx={{fontWeight: 600, mb:1}}>Description</Typography>
-          <Typography variant="body2" paragraph sx={{whiteSpace: 'pre-wrap', color: 'text.secondary', mb: 2.5}}>
-            {description || 'No description provided.'}
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Header Toolbar */}
+      <Toolbar 
+        sx={{ 
+          borderBottom: `1px solid ${theme.palette.divider}`,
+          flexShrink: 0,
+          gap: 1
+        }}
+      >
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="h6" noWrap>
+            {title}
           </Typography>
-          
-          <Divider sx={{ my: 2 }} />
-          <Typography variant="subtitle1" gutterBottom sx={{fontWeight: 600, mb:1.5}}>Rule Details</Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', columnGap: 1, rowGap: 1, '& .MuiTypography-body2': { color: 'text.secondary' }}}>
-            <DetailGridItem label="Rule Source" value={rule_source} />
-            <DetailGridItem label="Source ID" value={source_rule_id} />
-            <DetailGridItem label="Severity" value={severityDisplay} isStatus statusType={severity?.toLowerCase()} />
-            <DetailGridItem label="Status" value={status} isStatus statusType={status?.toLowerCase()} />
-             <DetailGridItem label="Validated" fullWidthChildren>
-                <Chip 
-                    icon={validationIcon} 
-                    label={validationChipLabel} 
-                    size="small" 
-                    color={validationChipColor} 
-                    variant="outlined" 
-                    sx={{height: 22, fontSize:'0.7rem'}} 
-                />
-            </DetailGridItem>
-            <DetailGridItem label="Author" value={author} />
-            <DetailGridItem label="Created" value={created_date ? formatDateTime(created_date) : '-'} />
-            <DetailGridItem label="Modified" value={modified_date ? formatDateTime(modified_date) : '-'} />
-            <DetailGridItem label="Version" value={version} />
-            <DetailGridItem label="Risk Score" value={risk_score?.toString()} />
-            <DetailGridItem label="License" value={license} />
-            <DetailGridItem label="Interval" value={interval} />
-            <DetailGridItem label="Source File" value={source_file_path} />
+          <Typography variant="body2" color="text.secondary" noWrap>
+            {rule_source} • Rule ID: {source_rule_id || id}
+          </Typography>
+        </Box>
 
-            {rule.rule_source === 'trinitycyber' && (
-              <>
-                <DetailGridItem label="Human Hash" value={human_hash} />
-                <DetailGridItem label="CVEs" fullWidthChildren>
-                  {cve && cve.length > 0 ? (
-                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                      {cve.map((cveId) => (
-                        <Chip
-                          key={cveId}
-                          label={cveId}
-                          size="small"
-                          clickable
-                          component="a"
-                          href={`https://cve.mitre.org/cgi-bin/cvename.cgi?name=${cveId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          sx={{
-                            bgcolor: theme.palette.warning.light,
-                            color: theme.palette.warning.dark,
-                            fontWeight: 500
-                          }}
-                        />
+        {/* Action buttons */}
+        <Stack direction="row" spacing={1}>
+          {/* Enrichment Score Badge */}
+          {enrichment_score > 0 && (
+            <Tooltip title={`Enrichment Score: ${enrichment_score}%`}>
+              <Chip
+                icon={<TrendingUpIcon />}
+                label={`${enrichment_score}%`}
+                size="small"
+                color={enrichment_score >= 75 ? 'success' : enrichment_score >= 50 ? 'warning' : 'default'}
+                variant="outlined"
+              />
+            </Tooltip>
+          )}
+
+          {onBookmark && (
+            <IconButton onClick={() => onBookmark(id)} color={isBookmarked ? 'primary' : 'default'}>
+              {isBookmarked ? <BookmarkIcon /> : <BookmarkBorderIcon />}
+            </IconButton>
+          )}
+
+          {onShare && (
+            <IconButton onClick={() => onShare(id)}>
+              <ShareIcon />
+            </IconButton>
+          )}
+
+          <IconButton onClick={() => setIsModalOpen(true)}>
+            <BugReportIcon />
+          </IconButton>
+
+          {onClose && (
+            <IconButton onClick={onClose}>
+              <CloseIcon />
+            </IconButton>
+          )}
+        </Stack>
+      </Toolbar>
+
+      {/* Content Area */}
+      <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {/* Tabs */}
+        <Tabs
+          value={tabValue}
+          onChange={handleTabChange}
+          sx={{ borderBottom: `1px solid ${theme.palette.divider}`, flexShrink: 0 }}
+        >
+          <Tab icon={<InfoIcon />} label="Overview" />
+          <Tab icon={<CodeIcon />} label="Detection" />
+          <Tab icon={<DataObjectIcon />} label="Raw Data" />
+          <Tab icon={<SecurityIcon />} label="MITRE & CVE" />
+        </Tabs>
+
+        {/* Tab Content */}
+        <Box sx={{ flex: 1, overflow: 'auto' }}>
+          {/* Overview Tab */}
+          <TabPanel value={tabValue} index={0}>
+            <Stack spacing={3}>
+              {/* Enrichment Status */}
+              {(has_mitre_mapping || has_cve_references || enrichment_score > 0) && (
+                <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.success.main, 0.1) }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <TrendingUpIcon color="success" />
+                    Enrichment Status
+                  </Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    {has_mitre_mapping && (
+                      <Chip label="MITRE Mapped" color="success" size="small" />
+                    )}
+                    {has_cve_references && (
+                      <Chip label="CVE References" color="success" size="small" />
+                    )}
+                    <Chip 
+                      label={`${enrichment_score}% Enriched`} 
+                      color={enrichment_score >= 75 ? 'success' : enrichment_score >= 50 ? 'warning' : 'default'}
+                      size="small" 
+                    />
+                  </Stack>
+                </Paper>
+              )}
+
+              {/* Basic Information */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 1, alignItems: 'start' }}>
+                <DetailGridItem label="Description" value={description} fullWidthChildren />
+                <DetailGridItem label="Severity" value={severityDisplay} isStatus statusType={severity} />
+                <DetailGridItem label="Status" value={status} isStatus />
+                <DetailGridItem label="Validation" value={validation_status} isStatus />
+                <DetailGridItem label="Author" value={author} />
+                <DetailGridItem label="Version" value={version} />
+                <DetailGridItem label="Risk Score" value={risk_score} />
+                <DetailGridItem label="License" value={license} />
+                <DetailGridItem label="Interval" value={interval} />
+                <DetailGridItem label="Source File" value={source_file_path} />
+                <DetailGridItem label="Created" value={created_date ? formatDateTime(created_date) : null} />
+                <DetailGridItem label="Modified" value={modified_date ? formatDateTime(modified_date) : null} />
+                
+                {/* Rule Platforms */}
+                <DetailGridItem label="Rule Platforms" fullWidthChildren>
+                  {rule_platforms.length > 0 ? (
+                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                      {rule_platforms.map(platform => (
+                        <Chip key={platform} label={platform} size="small" variant="outlined" />
                       ))}
                     </Stack>
                   ) : (
                     <Typography variant="body2">-</Typography>
                   )}
                 </DetailGridItem>
+
+                {/* Tags */}
+                {tags.length > 0 && (
+                  <DetailGridItem label="Tags" fullWidthChildren>
+                    <RuleTagsDisplay tags={tags} />
+                  </DetailGridItem>
+                )}
+
+                {/* False Positives */}
+                {false_positives.length > 0 && (
+                  <DetailGridItem label="False Positives" fullWidthChildren>
+                    <Stack spacing={1}>
+                      {false_positives.map((fp, index) => (
+                        <Typography key={index} variant="body2" sx={{ fontStyle: 'italic' }}>
+                          • {fp}
+                        </Typography>
+                      ))}
+                    </Stack>
+                  </DetailGridItem>
+                )}
+              </Box>
+            </Stack>
+          </TabPanel>
+
+          {/* Detection Tab */}
+          <TabPanel value={tabValue} index={1}>
+            {implementation ? (
+              <>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                    Implementation Details
+                  </Typography>
+                  <Tooltip title="Copy Implementation JSON">
+                    <IconButton 
+                      size="small" 
+                      onClick={() => handleCopyToClipboard(JSON.stringify(implementation, null, 2), 'Implementation JSON copied!')}
+                    >
+                      <ContentCopyIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    bgcolor: theme.palette.mode === 'dark' ? 
+                      alpha(theme.palette.common.black, 0.3) : 
+                      alpha(theme.palette.grey[900], 0.03),
+                    border: `1px solid ${theme.palette.divider}`,
+                    fontFamily: '"Fira Code", "Source Code Pro", Menlo, Monaco, Consolas, monospace',
+                    fontSize: '0.8rem',
+                    lineHeight: 1.5,
+                    borderRadius: 1,
+                    overflowX: 'auto',
+                    whiteSpace: 'pre',
+                    maxHeight: '70vh'
+                  }}
+                >
+                  {JSON.stringify(implementation, null, 2)}
+                </Paper>
+              </>
+            ) : (
+              <>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                    Detection Logic ({query_language ? formatQueryLanguage(query_language) : 'N/A'})
+                  </Typography>
+                  <Box>
+                    {query_language && (
+                      <Chip 
+                        label={formatQueryLanguage(query_language)} 
+                        size="small" 
+                        color="primary" 
+                        variant="outlined" 
+                        sx={{ mr: 1 }} 
+                      />
+                    )}
+                    <Tooltip title="Copy query">
+                      <IconButton 
+                        size="small" 
+                        onClick={() => handleCopyToClipboard(query, 'Query copied to clipboard!')}
+                      >
+                        <ContentCopyIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </Box>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    bgcolor: theme.palette.mode === 'dark' ? 
+                      alpha(theme.palette.common.black, 0.3) : 
+                      alpha(theme.palette.grey[900], 0.03),
+                    border: `1px solid ${theme.palette.divider}`,
+                    fontFamily: '"Fira Code", "Source Code Pro", Menlo, Monaco, Consolas, monospace',
+                    fontSize: '0.8rem',
+                    lineHeight: 1.5,
+                    borderRadius: 1,
+                    overflowX: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    maxHeight: '70vh'
+                  }}
+                >
+                  {query}
+                </Paper>
               </>
             )}
+          </TabPanel>
 
-            <DetailGridItem label="Platforms" fullWidthChildren={true}>
-              {rule_platforms && rule_platforms.length > 0 ? (
-                rule_platforms.map((platform) => (<Chip key={`rule-plat-detail-${platform}`} label={platform} size="small" variant="outlined" color="secondary" />))
-              ) : (
-                <Typography variant="body2">-</Typography>
-              )}
-            </DetailGridItem>
-          </Box>
-
-          {tags && tags.length > 0 && (
-            <>
-              <Divider sx={{ my: 2.5 }} />
-              <RuleTagsDisplay tags={tags} label="Tags" />
-            </>
-          )}
-
-          {(rawTacticsFromRule.length > 0 || linked_techniques.length > 0) && (
-            <>
-              <Divider sx={{my: 2.5 }} />
-              <Typography variant="subtitle1" gutterBottom sx={{fontWeight: 600, mb:1, display: 'flex', alignItems: 'center'}}>
-                <SecurityIcon fontSize="small" sx={{mr:1, color: 'text.secondary'}} />
-                MITRE ATT&CK Mapping
+          {/* Raw Data Tab */}
+          <TabPanel value={tabValue} index={2}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                Raw Rule Data
               </Typography>
-              {rawTacticsFromRule.length > 0 && (
-                <Box mb={1.5}>
-                  <Typography variant="caption" color="text.secondary" fontWeight="600" display="block" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                    <BubbleChartIcon sx={{ mr: 0.5, fontSize: '1rem', color: 'text.secondary' }} />
-                    Tactics
+              <Tooltip title="Copy raw data">
+                <IconButton 
+                  size="small" 
+                  onClick={() => handleCopyToClipboard(JSON.stringify(raw_rule, null, 2), 'Raw data copied!')}
+                >
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                bgcolor: theme.palette.mode === 'dark' ? 
+                  alpha(theme.palette.common.black, 0.3) : 
+                  alpha(theme.palette.grey[900], 0.03),
+                border: `1px solid ${theme.palette.divider}`,
+                fontFamily: '"Fira Code", "Source Code Pro", Menlo, Monaco, Consolas, monospace',
+                fontSize: '0.8rem',
+                lineHeight: 1.5,
+                borderRadius: 1,
+                overflowX: 'auto',
+                whiteSpace: 'pre',
+                maxHeight: '70vh'
+              }}
+            >
+              {JSON.stringify(raw_rule, null, 2)}
+            </Paper>
+          </TabPanel>
+
+          {/* MITRE & CVE Tab */}
+          <TabPanel value={tabValue} index={3}>
+            <Stack spacing={3}>
+              {/* MITRE Techniques */}
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <HubIcon /> MITRE ATT&CK Techniques
+                </Typography>
+                {linked_techniques.length > 0 ? (
+                  <Stack spacing={1}>
+                    {linked_techniques.map(technique => (
+                      <Chip
+                        key={technique.id}
+                        label={`${technique.id}: ${technique.name}`}
+                        clickable
+                        component="a"
+                        href={technique.url || `https://attack.mitre.org/techniques/${technique.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        variant="outlined"
+                        color="primary"
+                      />
+                    ))}
+                  </Stack>
+                ) : extracted_mitre && extracted_mitre.length > 0 ? (
+                  <Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      Extracted from rule content:
+                    </Typography>
+                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                      {extracted_mitre.map(techniqueId => (
+                        <Chip
+                          key={techniqueId}
+                          label={techniqueId}
+                          clickable
+                          component="a"
+                          href={`https://attack.mitre.org/techniques/${techniqueId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          size="small"
+                          color="secondary"
+                        />
+                      ))}
+                    </Stack>
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    No MITRE ATT&CK techniques mapped to this rule.
                   </Typography>
-                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                    {rawTacticsFromRule.map((tacticId) => {
-                       const tacticInfo = tacticDetailsMap[tacticId];
-                       const tacticName = tacticInfo?.name || tacticId;
-                       const tacticUrl = tacticInfo?.url || `https://attack.mitre.org/tactics/${tacticId.toUpperCase()}`;
-                       return (
-                        <Tooltip title={tacticName} key={tacticId}>
-                           <Chip
-                            label={tacticName}
-                            size="small"
-                            variant="filled"
-                            clickable
-                            component="a"
-                            href={tacticUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            sx={{fontFamily: tacticName === tacticId ? 'monospace' : undefined, bgcolor: theme.palette.info.light, color: theme.palette.info.dark, '&:hover': {bgcolor: theme.palette.info.main}}}
-                          />
-                        </Tooltip>
-                       );
+                )}
+              </Box>
+
+              {/* MITRE Tactics */}
+              {rawTacticsFromRule.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <BubbleChartIcon /> MITRE ATT&CK Tactics
+                  </Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    {rawTacticsFromRule.map(tacticId => {
+                      const tacticDetails = tacticDetailsMap[tacticId];
+                      return (
+                        <Chip
+                          key={tacticId}
+                          label={tacticDetails?.name || tacticId}
+                          clickable
+                          component="a"
+                          href={tacticDetails?.url || `https://attack.mitre.org/tactics/${tacticId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          variant="outlined"
+                          color="secondary"
+                        />
+                      );
                     })}
                   </Stack>
                 </Box>
               )}
-              {linked_techniques.length > 0 && (
-                 <Box>
-                    <Typography variant="caption" color="text.secondary" fontWeight="600" display="block" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                        <HubIcon sx={{ mr: 0.5, fontSize: '1rem', color: 'text.secondary' }} />
-                        Techniques
+
+              {/* CVE References */}
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5 }}>
+                  CVE References
+                </Typography>
+                {cve.length > 0 ? (
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    {cve.map(cveId => (
+                      <Chip
+                        key={cveId}
+                        label={cveId}
+                        clickable
+                        component="a"
+                        href={`https://cve.mitre.org/cgi-bin/cvename.cgi?name=${cveId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        variant="outlined"
+                        color="warning"
+                      />
+                    ))}
+                  </Stack>
+                ) : extracted_cves && extracted_cves.length > 0 ? (
+                  <Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      Extracted from rule content:
                     </Typography>
-                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                        {linked_techniques.map((tech) => (
-                            <Tooltip title={`${tech.name} (${tech.id})`} key={tech.id}>
-                                <Chip
-                                    label={tech.id}
-                                    size="small"
-                                    variant="filled"
-                                    clickable
-                                    component="a"
-                                    href={tech.url || `https://attack.mitre.org/techniques/${tech.id.replace(/\./g, '/')}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    sx={{fontFamily: 'monospace', bgcolor: theme.palette.primary.light, color: theme.palette.primary.dark, '&:hover': {bgcolor: theme.palette.primary.main}}}
-                                />
-                            </Tooltip>
-                        ))}
+                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                      {extracted_cves.map(cveId => (
+                        <Chip
+                          key={cveId}
+                          label={cveId}
+                          clickable
+                          component="a"
+                          href={`https://cve.mitre.org/cgi-bin/cvename.cgi?name=${cveId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          size="small"
+                          color="warning"
+                          variant="outlined"
+                        />
+                      ))}
                     </Stack>
-                </Box>
-              )}
-            </>
-          )}
-          
-          {false_positives && false_positives.length > 0 && (
-            <> <Divider sx={{ my: 2.5 }} /> <Typography variant="subtitle1" gutterBottom sx={{fontWeight: 600, mb:1}}>False Positives</Typography> <Stack spacing={0.5}> {false_positives.map((fp, i) => (<Typography key={i} variant="body2" sx={{color: 'text.secondary'}}>• {fp}</Typography>))} </Stack> </>
-          )}
-
-          <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-            <Button
-              variant="contained"
-              startIcon={<BugReportIcon />}
-              onClick={() => setIsModalOpen(true)}
-              fullWidth
-            >
-              Create Issue or Suggest Tuning
-            </Button>
-          </Box>
-          
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={1}>
-          {rule.rule_source === 'trinitycyber' ? (
-            <>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                <Typography variant="subtitle1" sx={{fontWeight: 600}}>
-                  Implementation Details
-                </Typography>
-                <Tooltip title="Copy Implementation JSON">
-                  <IconButton size="small" onClick={() => handleCopyToClipboard(JSON.stringify(implementation, null, 2), 'Implementation JSON copied!')}>
-                    <ContentCopyIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    No CVE references found for this rule.
+                  </Typography>
+                )}
               </Box>
-              <Paper 
-                elevation={0} 
-                sx={{ 
-                  p: 2, 
-                  bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.black, 0.3) : alpha(theme.palette.grey[900], 0.03),
-                  border: `1px solid ${theme.palette.divider}`,
-                  color: theme.palette.mode === 'dark' ? theme.palette.grey[200] : theme.palette.grey[800],
-                  fontFamily: '"Fira Code", "Source Code Pro", Menlo, Monaco, Consolas, "Courier New", monospace',
-                  fontSize: '0.8rem', 
-                  lineHeight: 1.5,
-                  borderRadius: 1, 
-                  overflowX: 'auto', 
-                  whiteSpace: 'pre',
-                  maxHeight: '70vh' 
-                }}
-              >
-                {JSON.stringify(implementation, null, 2)}
-              </Paper>
-            </>
-          ) : (
-            <>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                <Typography variant="subtitle1" sx={{fontWeight: 600}}>
-                  Detection Logic ({query_language ? formatQueryLanguage(query_language) : 'N/A'})
-                </Typography>
-                <Box>
-                  {query_language && <Chip label={formatQueryLanguage(query_language)} size="small" color="primary" variant="outlined" sx={{mr:1}} />}
-                  <Tooltip title="Copy query">
-                      <IconButton size="small" onClick={() => handleCopyToClipboard(query, 'Query copied to clipboard!')}>
-                          <ContentCopyIcon fontSize="small" />
-                      </IconButton>
-                  </Tooltip>
-                </Box>
-              </Box>
-              <Paper 
-                elevation={0} 
-                sx={{ 
-                  p: 2, 
-                  bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.black, 0.3) : alpha(theme.palette.grey[900], 0.03),
-                  border: `1px solid ${theme.palette.divider}`,
-                  color: theme.palette.mode === 'dark' ? theme.palette.grey[200] : theme.palette.grey[800],
-                  fontFamily: '"Fira Code", "Source Code Pro", Menlo, Monaco, Consolas, "Courier New", monospace', 
-                  fontSize: '0.875rem', 
-                  lineHeight: 1.6,
-                  borderRadius: 1, 
-                  overflowX: 'auto', 
-                  whiteSpace: 'pre-wrap', 
-                  wordBreak: 'break-all', 
-                  maxHeight: '60vh', 
-                  mb:2 
-                }}
-              >
-                {query}
-              </Paper>
-            </>
-          )}
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={2}>
-          <Typography variant="subtitle1" gutterBottom sx={{fontWeight: 600, mb:1.5}}>Linked MITRE ATT&CK Entities</Typography>
-          {linked_techniques && linked_techniques.length > 0 ? (
-            <Stack spacing={1.5}>
-              {linked_techniques.map((tech) => (
-                <Paper key={tech.id} variant="outlined" sx={{p:1.5, borderRadius:1}}>
-                  <Link 
-                    href={tech.url || `https://attack.mitre.org/techniques/${tech.id.replace(/\./g, '/')}`}
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    underline="hover" 
-                    sx={{fontWeight: 500, display:'block', mb:0.5}}
-                  >
-                    {tech.name} ({tech.id})
-                  </Link>
-                  <Chip label={tech.is_subtechnique ? 'Sub-technique' : 'Technique'} size="small" variant="outlined" color={tech.is_subtechnique ? "secondary" : "primary"}/>
-                </Paper>
-              ))}
             </Stack>
-          ) : (
-            <Typography variant="body2" color="text.secondary" sx={{mt:1}}>No MITRE ATT&CK techniques directly linked to this rule.</Typography>
-          )}
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={3}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                <Typography variant="subtitle1" sx={{fontWeight: 600}}>Raw Rule JSON</Typography>
-                <Tooltip title="Copy JSON">
-                    <IconButton size="small" onClick={() => handleCopyToClipboard(JSON.stringify(raw_rule, null, 2), 'Raw JSON copied!')}>
-                        <ContentCopyIcon fontSize="small" />
-                    </IconButton>
-                </Tooltip>
-            </Box>
-            <Paper 
-                elevation={0} 
-                sx={{ 
-                    p: 2, 
-                    bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.black, 0.3) : alpha(theme.palette.grey[900], 0.03),
-                    border: `1px solid ${theme.palette.divider}`,
-                    color: theme.palette.mode === 'dark' ? theme.palette.grey[200] : theme.palette.grey[800],
-                    fontFamily: '"Fira Code", "Source Code Pro", Menlo, Monaco, Consolas, "Courier New", monospace',
-                    fontSize: '0.8rem', 
-                    lineHeight: 1.5,
-                    borderRadius: 1, 
-                    overflowX: 'auto', 
-                    whiteSpace: 'pre', 
-                    maxHeight: '70vh' 
-                }}
-            >
-                {JSON.stringify(raw_rule, null, 2)}
-            </Paper>
-        </TabPanel>
+          </TabPanel>
+        </Box>
       </Box>
+
+      {/* Create Issue Modal */}
       <CreateIssueModal
-        open={isModalOpen}
+        isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        ruleId={rule.id}
-        ruleName={rule.title}
+        ruleId={id}
+        ruleTitle={title}
       />
     </Box>
   );
