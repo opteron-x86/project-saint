@@ -16,6 +16,11 @@ export interface TechniqueBase {
   is_subtechnique: boolean;
 }
 
+export interface PaginationParams {
+  page: number;
+  limit: number;
+}
+
 // --- Enhanced MITRE ATT&CK Data Structures ---
 export interface MitreTechnique extends TechniqueBase {
   description?: string | null;
@@ -23,8 +28,8 @@ export interface MitreTechnique extends TechniqueBase {
   subtechniques: MitreTechnique[];
   is_deprecated?: boolean;
   stix_id?: string | null;
-  rule_count?: number; // New: number of rules covering this technique
-  coverage_percentage?: number; // New: coverage percentage
+  rule_count?: number;
+  coverage_percentage?: number;
 }
 
 export interface MitreTactic {
@@ -36,7 +41,7 @@ export interface MitreTactic {
   url?: string | null;
   matrix_order?: number | null;
   techniques: MitreTechnique[];
-  rule_count?: number; // New: total rules for this tactic
+  rule_count?: number;
 }
 
 export type MitreMatrixData = MitreTactic[];
@@ -51,7 +56,7 @@ export interface CveData {
   published_date?: string | null;
   modified_date?: string | null;
   references?: string[] | null;
-  rule_count?: number; // New: number of rules referencing this CVE
+  rule_count?: number;
 }
 
 export interface CveStats {
@@ -73,7 +78,6 @@ export interface ElasticDetails {
   false_positives?: string[] | null;
   interval?: string | null;
   risk_score?: number | null;
-  // New: extracted enrichments
   extracted_mitre?: string[] | null;
   extracted_cves?: string[] | null;
 }
@@ -90,7 +94,6 @@ export interface SentinelDetails {
   tactics?: string[] | null;
   entity_mappings?: any | null;
   event_grouping_settings?: any | null;
-  // New: extracted enrichments
   extracted_mitre?: string[] | null;
   extracted_cves?: string[] | null;
 }
@@ -103,12 +106,11 @@ export interface TrinityCyberDetails {
   information_controls?: any | null;
   references?: string[] | null;
   cve?: string[] | null;
-  // New: extracted enrichments
   extracted_mitre?: string[] | null;
   extracted_cves?: string[] | null;
 }
 
-// Represents the base information for a rule, common across all sources.
+// --- Rule Types ---
 export interface RuleSummary {
   id: string;
   source_rule_id?: string | null;
@@ -122,14 +124,12 @@ export interface RuleSummary {
   modified_date?: string | null;
   rule_platforms?: string[] | null;
   linked_technique_ids?: string[] | null;
-  // New: enriched data indicators
   has_mitre_mapping?: boolean;
   has_cve_references?: boolean;
-  enrichment_score?: number; // 0-100 indicating how well enriched the rule is
-  tags?: string[] | null; // Searchable tags from processors
+  enrichment_score?: number;
+  tags?: string[] | null;
 }
 
-// Represents the full details for a single rule, including nested source-specific data.
 export interface RuleDetail extends RuleSummary {
   author?: string | null;
   source_file_path?: string | null;
@@ -138,19 +138,20 @@ export interface RuleDetail extends RuleSummary {
   elastic_details?: ElasticDetails | null;
   sentinel_details?: SentinelDetails | null;
   trinitycyber_details?: TrinityCyberDetails | null;
-  // New: enriched relationship data
-  mitre_techniques?: MitreTechnique[] | null; // Full technique objects with metadata
-  cve_references?: CveData[] | null; // Full CVE objects with details
-  related_rules?: RuleSummary[] | null; // Rules with similar techniques/CVEs
+  mitre_techniques?: MitreTechnique[] | null;
+  cve_references?: CveData[] | null;
+  related_rules?: RuleSummary[] | null;
 }
 
+// --- API Response Types (Matching Lambda format) ---
 export interface FetchRulesResponse {
-  rules: RuleSummary[];
+  rules: RuleSummary[];  // Frontend expects 'rules' property
+  items?: RuleSummary[];  // API returns 'items'
   total: number;
-  page: number;
+  offset: number;  // API uses offset/limit, not page
   limit: number;
-  totalPages: number;
-  // New: aggregation data
+  page?: number;
+  totalPages?: number;
   facets?: {
     severity: Record<string, number>;
     platforms: Record<string, number>;
@@ -160,7 +161,7 @@ export interface FetchRulesResponse {
   };
 }
 
-// --- Enhanced Techniques Coverage Data Structures ---
+// --- Techniques Coverage ---
 export interface TechniqueRuleInfo {
   id: string;
   title: string;
@@ -175,7 +176,6 @@ export interface TechniqueCoverageDetail {
   name: string;
   count: number;
   rules: TechniqueRuleInfo[];
-  // New: enhanced coverage data
   coverage_quality?: 'excellent' | 'good' | 'fair' | 'poor';
   platforms_covered?: string[];
   rule_sources_covering?: string[];
@@ -189,7 +189,6 @@ export interface TechniquesCoverageResponse {
   techniques: TechniqueCoverageDetail[];
   platform_filter_applied?: string | null;
   rule_platform_filter_applied?: string | null;
-  // New: coverage analytics
   coverage_gaps?: {
     technique_id: string;
     name: string;
@@ -202,13 +201,12 @@ export interface TechniquesCoverageResponse {
   };
 }
 
-// --- Enhanced Rule Statistics Data Structures ---
+// --- Rule Statistics ---
 export interface StatsCategorical {
   by_severity: Record<string, number>;
   by_platform: Record<string, number>;
   by_rule_source: Record<string, number>;
   by_rule_platform: Record<string, number>;
-  // New: enrichment statistics
   by_mitre_coverage: Record<string, number>;
   by_cve_coverage: Record<string, number>;
   by_enrichment_quality: Record<string, number>;
@@ -220,7 +218,6 @@ export interface RuleStatsResponse {
   inactive_rules: number;
   active_filters?: Record<string, any> | null;
   stats: StatsCategorical;
-  // New: enrichment statistics
   enrichment_stats: {
     rules_with_mitre: number;
     rules_with_cves: number;
@@ -232,12 +229,12 @@ export interface RuleStatsResponse {
 
 export interface FetchRuleStatsResponse extends RuleStatsResponse {}
 
-// --- Enhanced Filter Options Data Structures ---
+// --- Filter Options ---
 export interface FilterOption {
   value: string;
   label: string;
-  count?: number; // New: count of items for this filter
-  description?: string; // New: optional description
+  count?: number;
+  description?: string;
 }
 
 export interface FilterOptionsResponse {
@@ -247,16 +244,15 @@ export interface FilterOptionsResponse {
   tactics: FilterOption[];
   rule_platforms: FilterOption[];
   validation_statuses: FilterOption[];
-  // New: enrichment-based filters
   mitre_techniques: FilterOption[];
   cve_severities: FilterOption[];
   enrichment_levels: FilterOption[];
 }
 
-// --- Enhanced Filter Types for UI and API Requests ---
+// --- Filters for API Requests ---
 export interface RuleFilters {
   search?: string;
-  query?: string; // New: dedicated full-text search
+  query?: string;
   severity?: string[];
   platforms?: string[];
   techniques?: string[];
@@ -266,126 +262,84 @@ export interface RuleFilters {
   dateRange?: { start?: string; end?: string; } | null;
   rule_platform?: string[];
   validation_status?: string[];
-  // New: enhanced filtering options
-  mitre_techniques?: string[]; // Filter by specific MITRE techniques
-  cve_ids?: string[]; // Filter by specific CVE IDs
-  has_mitre_mapping?: boolean; // Filter rules with/without MITRE mappings
-  has_cve_references?: boolean; // Filter rules with/without CVE references
-  enrichment_score_min?: number; // Minimum enrichment score (0-100)
-  is_active?: boolean; // Filter active/inactive rules
-  created_after?: string; // Filter by creation date
-  modified_after?: string; // Filter by modification date
+  mitre_techniques?: string[];
+  cve_ids?: string[];
+  has_mitre?: boolean;
+  has_cves?: boolean;
+  is_active?: boolean;
 }
 
-// --- Pagination Parameters ---
-export interface PaginationParams {
-  page: number;
-  limit: number;
-  sortBy?: string;
-  sortDirection?: 'asc' | 'desc';
-  // New: enhanced sorting options
-  include_facets?: boolean; // Include aggregation data in response
-}
-
-// --- Analytics and Dashboard Data Structures ---
+// --- Dashboard and Analytics ---
 export interface DashboardStats {
-  overview: {
-    total_rules: number;
-    active_rules: number;
-    mitre_coverage: {
-      techniques_covered: number;
-      coverage_percentage: number;
-    };
-    cve_coverage: {
-      rules_with_cves: number;
-      coverage_percentage: number;
-    };
+  total_rules: number;
+  active_rules: number;
+  mitre_coverage: {
+    percentage: number;
+    techniques_covered: number;
+    total_techniques: number;
   };
-  charts: {
-    severity_distribution: { name: string; value: number; color?: string }[];
-    rules_by_source: { name: string; value: number; color?: string }[];
-    mitre_tactic_coverage: { tactic: string; covered: number; total: number }[];
-    enrichment_quality: { level: string; count: number }[];
+  cve_coverage: {
+    percentage: number;
+    cves_referenced: number;
+    critical_cves: number;
   };
-  alerts: {
-    type: 'info' | 'warning' | 'error' | 'success';
-    title: string;
-    message: string;
-    action_url?: string;
-  }[];
-  recent_activity: {
-    type: 'rule_created' | 'rule_updated' | 'enrichment_improved';
-    title: string;
-    description: string;
-    timestamp: string;
-    rule_id?: string;
-  }[];
+  severity_distribution: Record<string, number>;
+  platform_distribution: Record<string, number>;
+  recent_updates: {
+    rules_added_24h: number;
+    rules_modified_7d: number;
+  };
+  top_gaps: Array<{
+    technique_id: string;
+    name: string;
+    priority: string;
+  }>;
 }
 
 export interface TrendData {
-  time_series: {
+  period: string;
+  data_points: Array<{
     date: string;
-    rules_created: number;
-    rules_updated: number;
-    enrichment_improvements: number;
-  }[];
-  period_comparison: {
-    current_period: {
-      rules_created: number;
-      rules_updated: number;
-      coverage_improvement: number;
-    };
-    previous_period: {
-      rules_created: number;
-      rules_updated: number;
-      coverage_improvement: number;
-    };
-    percentage_change: {
-      rules_created: number;
-      rules_updated: number;
-      coverage_improvement: number;
-    };
+    total_rules: number;
+    mitre_coverage: number;
+    cve_coverage: number;
+  }>;
+  trends: {
+    rules_growth: number;
+    coverage_improvement: number;
   };
 }
 
-// --- Export Data Structures ---
+// --- Export Options ---
 export interface ExportOptions {
-  format: 'json' | 'csv' | 'excel';
-  include_enrichment_data?: boolean;
+  format: 'json' | 'csv';
+  include_enrichments?: boolean;
+  include_raw_content?: boolean;
   include_rule_content?: boolean;
   filters?: RuleFilters;
 }
 
 export interface ExportResponse {
-  download_url: string;
-  expires_at: string;
-  file_size_bytes: number;
-  record_count: number;
+  download_url?: string;
+  expires_at?: string;
+  file_size_bytes?: number;
+  record_count?: number;
+  data?: any;  // For direct data response
 }
 
-// --- Global Search Data Structures ---
-export interface GlobalSearchResult {
-  type: 'rule' | 'technique' | 'cve';
-  id: string;
-  title: string;
-  description?: string;
-  score: number; // Search relevance score
-  highlight?: string; // Highlighted matching text
-  metadata?: Record<string, any>;
-}
-
+// --- Global Search (Matching Lambda format) ---
 export interface GlobalSearchResponse {
-  results: GlobalSearchResult[];
-  total: number;
-  query: string;
-  took_ms: number;
-  facets: {
-    by_type: Record<string, number>;
-    by_source: Record<string, number>;
+  results: {
+    rules: RuleSummary[];
+    mitre_techniques: MitreTechnique[];
+    cves: CveData[];
+    total_count: number;
   };
+  query: string;
+  took_ms?: number;
 }
 
-// --- Issue Creation (existing, keeping for compatibility) ---
+// --- Issue Creation ---
 export type IssueType =
   | 'False Positive'
   | 'Tuning Suggestion'

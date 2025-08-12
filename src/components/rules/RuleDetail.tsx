@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Box, Typography, Divider, Chip, Stack, IconButton, Tooltip, Tab, Tabs, Link, useTheme, Paper,
-  useMediaQuery, Toolbar, Button, Alert, CircularProgress, LinearProgress,
+  Box, Typography, Chip, Stack, IconButton, Tooltip, Tab, Tabs, Link, useTheme, Paper,
+  useMediaQuery, Toolbar, Alert, LinearProgress,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ShareIcon from '@mui/icons-material/Share';
@@ -16,9 +16,6 @@ import DataObjectIcon from '@mui/icons-material/DataObject';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import HubIcon from '@mui/icons-material/Hub';
 import BubbleChartIcon from '@mui/icons-material/BubbleChart';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import HighlightOffIcon from '@mui/icons-material/HighlightOff';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import { alpha } from '@mui/material/styles';
@@ -115,7 +112,7 @@ interface RuleDetailProps {
   rule?: RuleDetailType | null;
   isLoading?: boolean;
   isError?: boolean;
-  error?: any;
+  error?: Error | null;
   isBookmarked?: boolean;
   onClose?: () => void;
   onBookmark?: (ruleId: string) => void;
@@ -123,7 +120,6 @@ interface RuleDetailProps {
 }
 
 const RuleDetail: React.FC<RuleDetailProps> = ({
-  ruleId,
   rule,
   isLoading = false,
   isError = false,
@@ -134,13 +130,11 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
   onShare,
 }) => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [tabValue, setTabValue] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // MITRE data for tactics mapping
   const { data: mitreMatrixData } = useMitreMatrixQuery();
-  const [tacticDetailsMap, setTacticDetailsMap] = useState<Record<string, { name: string; url?: string | null }>>({});
 
   // Store hooks
   const addRecentlyViewedRule = useRuleStore((state) => state.addRecentlyViewedRule);
@@ -152,57 +146,53 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
     }
   }, [rule, addRecentlyViewedRule]);
 
-  // Process rule-specific data with enhanced enrichment information
+  // Process rule-specific data - FIXED to handle actual API response format
   const ruleSpecifics = useMemo(() => {
     if (!rule) return null;
 
-    const elastic = rule.elastic_details;
-    const sentinel = rule.sentinel_details;
-    const trinity = rule.trinitycyber_details;
+    // Handle the actual API response structure
+    const rawRule = rule.raw_rule || {};
+    const metadata = rule.rule_metadata || {};
+    
+    // Extract query from raw_rule (for Elastic rules) or rule_content
+    let query = 'No detection logic available.';
+    let queryLanguage = 'unknown';
+    
+    if (rawRule && rawRule.query) {
+      query = rawRule.query;
+      queryLanguage = rawRule.language || 'kuery';
+    } else if (rule.rule_content && typeof rule.rule_content === 'string') {
+      try {
+        const parsedContent = JSON.parse(rule.rule_content);
+        query = parsedContent.query || 'No detection logic available.';
+        queryLanguage = parsedContent.language || 'kuery';
+      } catch (e) {
+        console.error('Failed to parse rule_content:', e);
+        // If parsing fails, just show the raw content
+        query = rule.rule_content || 'No detection logic available.';
+      }
+    }
 
     return {
       severity: rule.severity || 'unknown',
-      query: elastic?.query || sentinel?.query || 'No detection logic available.',
-      query_language: elastic?.language || (sentinel ? 'KQL' : 'unknown'),
-      version: elastic?.version,
-      license: elastic?.license,
-      tags: elastic?.tags || [],
-      false_positives: elastic?.false_positives || [],
-      interval: elastic?.interval,
-      risk_score: elastic?.risk_score,
-      human_hash: trinity?.human_hash,
-      cve: trinity?.cve || [],
-      implementation: trinity?.implementation,
-      // New enrichment data
-      extracted_mitre: elastic?.extracted_mitre || sentinel?.extracted_mitre || trinity?.extracted_mitre || [],
-      extracted_cves: elastic?.extracted_cves || sentinel?.extracted_cves || trinity?.extracted_cves || [],
+      query,
+      query_language: queryLanguage,
+      version: rawRule.version || metadata?.version,
+      license: rawRule.license || metadata?.license || '',
+      tags: rule.tags || rawRule.tags || [],
+      false_positives: rawRule.false_positives || metadata?.false_positives || [],
+      interval: rawRule.interval || metadata?.interval,
+      risk_score: rawRule.risk_score || metadata?.risk_score,
+      author: rawRule.author || metadata?.author,
+      references: rawRule.references || metadata?.references || [],
+      // Extract from metadata if available
+      platforms: metadata?.rule_platforms || [],
+      from: rawRule.from || metadata?.from,
+      to: rawRule.to || metadata?.to,
+      index: rawRule.index || metadata?.index || [],
+      filters: rawRule.filters || metadata?.filters || [],
     };
   }, [rule]);
-
-  // Build tactics details map from MITRE matrix data
-  useEffect(() => {
-    if (mitreMatrixData && rule?.raw_rule?.tactics) {
-      const newMap: Record<string, { name: string; url?: string | null }> = {};
-      const tacticIds = (Array.isArray(rule.raw_rule.tactics) ? 
-        rule.raw_rule.tactics : [rule.raw_rule.tactics]
-      ) as string[];
-      
-      tacticIds.forEach(tacticId => {
-        const foundTactic = mitreMatrixData.find(t => 
-          t.id === tacticId || t.shortname === tacticId || t.stix_id === tacticId
-        );
-        if (foundTactic) {
-          newMap[tacticId] = { name: foundTactic.name, url: foundTactic.url };
-        } else {
-          newMap[tacticId] = { 
-            name: tacticId, 
-            url: `https://attack.mitre.org/tactics/${tacticId}` 
-          };
-        }
-      });
-      setTacticDetailsMap(newMap);
-    }
-  }, [mitreMatrixData, rule?.raw_rule?.tactics]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -251,9 +241,8 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
         </Box>
         {isError && error ? (
           <ErrorDisplay 
-            error={error} 
             title="Failed to load rule details"
-            message="There was an error loading the rule data."
+            message={error.message || "There was an error loading the rule data."}
           />
         ) : (
           <Alert severity="warning">
@@ -264,61 +253,62 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
     );
   }
 
-  // Extract rule data with fallbacks
+  // Extract rule data with fallbacks - FIXED to handle actual API response
   const {
-    id, title, description, rule_source, created_date, modified_date, author,
-    linked_techniques = [],
+    id, 
+    title, 
+    description, 
+    source,
+    created_date, 
+    modified_date, 
     rule_platforms = [],
-    status,
+    is_active,
     raw_rule,
-    source_file_path,
-    source_rule_id,
-    // New enrichment fields
+    mitre_techniques = [], // Use actual API field name
+    cves = [],
+    tags = [],
+    validation_status,
     has_mitre_mapping = false,
     has_cve_references = false,
     enrichment_score = 0,
   } = rule;
 
-  const validation_status = (raw_rule as any)?.validation_status;
+  console.log('MITRE techniques from API:', mitre_techniques); // Debug log
+  console.log('CVEs from API:', cves); // Debug log
+  console.log('Raw rule from API:', raw_rule); // Debug log
+
+  // Get author from multiple possible locations
+  const author = ruleSpecifics?.author || 
+    (Array.isArray(rule.rule_metadata?.author) ? rule.rule_metadata.author.join(', ') : rule.rule_metadata?.author) ||
+    (raw_rule && Array.isArray(raw_rule.author) ? raw_rule.author.join(', ') : raw_rule?.author);
 
   const {
     severity, query, query_language, version, risk_score, license, interval, 
-    tags, false_positives, human_hash, cve, implementation,
-    extracted_mitre, extracted_cves
+    false_positives, references, platforms, from, to, index, filters
   } = ruleSpecifics!;
 
   const severityDisplay = SEVERITY_DISPLAY[severity as RuleSeverityEnum] || severity || 'Unknown';
-  const rawTacticsFromRule = (Array.isArray(raw_rule?.tactics) ? 
-    raw_rule.tactics : raw_rule?.tactics ? [raw_rule.tactics] : []
-  ) as string[];
+  const status = is_active ? 'active' : 'inactive';
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Header Toolbar */}
-      <Toolbar 
-        sx={{ 
-          borderBottom: `1px solid ${theme.palette.divider}`,
-          flexShrink: 0,
-          gap: 1
-        }}
-      >
+      {/* Header */}
+      <Toolbar sx={{ borderBottom: `1px solid ${theme.palette.divider}`, flexShrink: 0 }}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="h6" noWrap>
-            {title}
+          <Typography variant="h6" noWrap sx={{ fontWeight: 600 }}>
+            {title || 'Unnamed Rule'}
           </Typography>
           <Typography variant="body2" color="text.secondary" noWrap>
-            {rule_source} • Rule ID: {source_rule_id || id}
+            {source?.name || 'Unknown Source'} • {id}
           </Typography>
         </Box>
 
-        {/* Action buttons */}
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} sx={{ ml: 2 }}>
           {/* Enrichment Score Badge */}
           {enrichment_score > 0 && (
             <Tooltip title={`Enrichment Score: ${enrichment_score}%`}>
               <Chip
-                icon={<TrendingUpIcon />}
-                label={`${enrichment_score}%`}
+                label={`${enrichment_score}% Enriched`}
                 size="small"
                 color={enrichment_score >= 75 ? 'success' : enrichment_score >= 50 ? 'warning' : 'default'}
                 variant="outlined"
@@ -327,13 +317,13 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
           )}
 
           {onBookmark && (
-            <IconButton onClick={() => onBookmark(id)} color={isBookmarked ? 'primary' : 'default'}>
+            <IconButton onClick={() => onBookmark(String(id))} color={isBookmarked ? 'primary' : 'default'}>
               {isBookmarked ? <BookmarkIcon /> : <BookmarkBorderIcon />}
             </IconButton>
           )}
 
           {onShare && (
-            <IconButton onClick={() => onShare(id)}>
+            <IconButton onClick={() => onShare(String(id))}>
               <ShareIcon />
             </IconButton>
           )}
@@ -403,15 +393,16 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                 <DetailGridItem label="Risk Score" value={risk_score} />
                 <DetailGridItem label="License" value={license} />
                 <DetailGridItem label="Interval" value={interval} />
-                <DetailGridItem label="Source File" value={source_file_path} />
+                <DetailGridItem label="From" value={from} />
+                <DetailGridItem label="To" value={to} />
                 <DetailGridItem label="Created" value={created_date ? formatDateTime(created_date) : null} />
                 <DetailGridItem label="Modified" value={modified_date ? formatDateTime(modified_date) : null} />
                 
                 {/* Rule Platforms */}
                 <DetailGridItem label="Rule Platforms" fullWidthChildren>
-                  {rule_platforms.length > 0 ? (
+                  {rule_platforms && rule_platforms.length > 0 ? (
                     <Stack direction="row" spacing={1} flexWrap="wrap">
-                      {rule_platforms.map(platform => (
+                      {rule_platforms.map((platform: string) => (
                         <Chip key={platform} label={platform} size="small" variant="outlined" />
                       ))}
                     </Stack>
@@ -420,18 +411,55 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                   )}
                 </DetailGridItem>
 
+                {/* Technique Platforms */}
+                {platforms && platforms.length > 0 && (
+                  <DetailGridItem label="Technique Platforms" fullWidthChildren>
+                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                      {platforms.map((platform: string) => (
+                        <Chip key={platform} label={platform} size="small" variant="outlined" color="secondary" />
+                      ))}
+                    </Stack>
+                  </DetailGridItem>
+                )}
+
+                {/* Index */}
+                {index && index.length > 0 && (
+                  <DetailGridItem label="Index Patterns" fullWidthChildren>
+                    <Stack spacing={0.5}>
+                      {index.map((idx: string, i: number) => (
+                        <Typography key={i} variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                          {idx}
+                        </Typography>
+                      ))}
+                    </Stack>
+                  </DetailGridItem>
+                )}
+
                 {/* Tags */}
-                {tags.length > 0 && (
+                {tags && tags.length > 0 && (
                   <DetailGridItem label="Tags" fullWidthChildren>
                     <RuleTagsDisplay tags={tags} />
                   </DetailGridItem>
                 )}
 
+                {/* References */}
+                {references && references.length > 0 && (
+                  <DetailGridItem label="References" fullWidthChildren>
+                    <Stack spacing={0.5}>
+                      {references.map((ref: string, index: number) => (
+                        <Link key={index} href={ref} target="_blank" rel="noopener noreferrer" variant="body2">
+                          {ref}
+                        </Link>
+                      ))}
+                    </Stack>
+                  </DetailGridItem>
+                )}
+
                 {/* False Positives */}
-                {false_positives.length > 0 && (
+                {false_positives && false_positives.length > 0 && (
                   <DetailGridItem label="False Positives" fullWidthChildren>
                     <Stack spacing={1}>
-                      {false_positives.map((fp, index) => (
+                      {false_positives.map((fp: string, index: number) => (
                         <Typography key={index} variant="body2" sx={{ fontStyle: 'italic' }}>
                           • {fp}
                         </Typography>
@@ -445,67 +473,22 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
 
           {/* Detection Tab */}
           <TabPanel value={tabValue} index={1}>
-            {implementation ? (
-              <>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    Implementation Details
-                  </Typography>
-                  <Tooltip title="Copy Implementation JSON">
-                    <IconButton 
-                      size="small" 
-                      onClick={() => handleCopyToClipboard(JSON.stringify(implementation, null, 2), 'Implementation JSON copied!')}
-                    >
-                      <ContentCopyIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 2,
-                    bgcolor: theme.palette.mode === 'dark' ? 
-                      alpha(theme.palette.common.black, 0.3) : 
-                      alpha(theme.palette.grey[900], 0.03),
-                    border: `1px solid ${theme.palette.divider}`,
-                    fontFamily: '"Fira Code", "Source Code Pro", Menlo, Monaco, Consolas, monospace',
-                    fontSize: '0.8rem',
-                    lineHeight: 1.5,
-                    borderRadius: 1,
-                    overflowX: 'auto',
-                    whiteSpace: 'pre',
-                    maxHeight: '70vh'
-                  }}
-                >
-                  {JSON.stringify(implementation, null, 2)}
-                </Paper>
-              </>
-            ) : (
-              <>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    Detection Logic ({query_language ? formatQueryLanguage(query_language) : 'N/A'})
-                  </Typography>
-                  <Box>
-                    {query_language && (
-                      <Chip 
-                        label={formatQueryLanguage(query_language)} 
-                        size="small" 
-                        color="primary" 
-                        variant="outlined" 
-                        sx={{ mr: 1 }} 
-                      />
-                    )}
-                    <Tooltip title="Copy query">
-                      <IconButton 
-                        size="small" 
-                        onClick={() => handleCopyToClipboard(query, 'Query copied to clipboard!')}
-                      >
-                        <ContentCopyIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                </Box>
+            <Stack spacing={2}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CodeIcon /> Detection Logic ({formatQueryLanguage(query_language)})
+                </Typography>
+                <Tooltip title="Copy query">
+                  <IconButton 
+                    size="small" 
+                    onClick={() => handleCopyToClipboard(query, 'Query copied!')}
+                  >
+                    <ContentCopyIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              
+              {query !== 'No detection logic available.' ? (
                 <Paper
                   elevation={0}
                   sx={{
@@ -525,8 +508,50 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                 >
                   {query}
                 </Paper>
-              </>
-            )}
+              ) : (
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  No detection logic available for this rule.
+                </Alert>
+              )}
+
+              {/* Filters if available */}
+              {filters && filters.length > 0 && (
+                <>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                      Filters
+                    </Typography>
+                    <Tooltip title="Copy filters">
+                      <IconButton 
+                        size="small" 
+                        onClick={() => handleCopyToClipboard(JSON.stringify(filters, null, 2), 'Filters copied!')}
+                      >
+                        <ContentCopyIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2,
+                      bgcolor: theme.palette.mode === 'dark' ? 
+                        alpha(theme.palette.common.black, 0.3) : 
+                        alpha(theme.palette.grey[900], 0.03),
+                      border: `1px solid ${theme.palette.divider}`,
+                      fontFamily: '"Fira Code", "Source Code Pro", Menlo, Monaco, Consolas, monospace',
+                      fontSize: '0.8rem',
+                      lineHeight: 1.5,
+                      borderRadius: 1,
+                      overflowX: 'auto',
+                      whiteSpace: 'pre',
+                      maxHeight: '30vh'
+                    }}
+                  >
+                    {JSON.stringify(filters, null, 2)}
+                  </Paper>
+                </>
+              )}
+            </Stack>
           </TabPanel>
 
           {/* Raw Data Tab */}
@@ -538,7 +563,10 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
               <Tooltip title="Copy raw data">
                 <IconButton 
                   size="small" 
-                  onClick={() => handleCopyToClipboard(JSON.stringify(raw_rule, null, 2), 'Raw data copied!')}
+                  onClick={() => handleCopyToClipboard(
+                    raw_rule ? JSON.stringify(raw_rule, null, 2) : 'No raw rule data available', 
+                    'Raw data copied!'
+                  )}
                 >
                   <ContentCopyIcon fontSize="small" />
                 </IconButton>
@@ -561,7 +589,11 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                 maxHeight: '70vh'
               }}
             >
-              {JSON.stringify(raw_rule, null, 2)}
+              {raw_rule ? JSON.stringify(raw_rule, null, 2) : (
+                <Alert severity="info">
+                  No raw rule data available for this rule.
+                </Alert>
+              )}
             </Paper>
           </TabPanel>
 
@@ -573,43 +605,31 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
                   <HubIcon /> MITRE ATT&CK Techniques
                 </Typography>
-                {linked_techniques.length > 0 ? (
+                {mitre_techniques && mitre_techniques.length > 0 ? (
                   <Stack spacing={1}>
-                    {linked_techniques.map(technique => (
+                    {mitre_techniques.map((technique, index) => (
                       <Chip
-                        key={technique.id}
-                        label={`${technique.id}: ${technique.name}`}
+                        key={technique.technique_id || index}
+                        label={`${technique.technique_id}: ${technique.name}`}
                         clickable
                         component="a"
-                        href={technique.url || `https://attack.mitre.org/techniques/${technique.id}`}
+                        href={`https://attack.mitre.org/techniques/${technique.technique_id}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         variant="outlined"
                         color="primary"
+                        size="medium"
+                        sx={{ 
+                          justifyContent: 'flex-start',
+                          '& .MuiChip-label': { 
+                            overflow: 'visible',
+                            textOverflow: 'clip',
+                            whiteSpace: 'normal'
+                          }
+                        }}
                       />
                     ))}
                   </Stack>
-                ) : extracted_mitre && extracted_mitre.length > 0 ? (
-                  <Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      Extracted from rule content:
-                    </Typography>
-                    <Stack direction="row" spacing={1} flexWrap="wrap">
-                      {extracted_mitre.map(techniqueId => (
-                        <Chip
-                          key={techniqueId}
-                          label={techniqueId}
-                          clickable
-                          component="a"
-                          href={`https://attack.mitre.org/techniques/${techniqueId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          size="small"
-                          color="secondary"
-                        />
-                      ))}
-                    </Stack>
-                  </Box>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
                     No MITRE ATT&CK techniques mapped to this rule.
@@ -617,82 +637,69 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                 )}
               </Box>
 
-              {/* MITRE Tactics */}
-              {rawTacticsFromRule.length > 0 && (
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <BubbleChartIcon /> MITRE ATT&CK Tactics
-                  </Typography>
-                  <Stack direction="row" spacing={1} flexWrap="wrap">
-                    {rawTacticsFromRule.map(tacticId => {
-                      const tacticDetails = tacticDetailsMap[tacticId];
-                      return (
-                        <Chip
-                          key={tacticId}
-                          label={tacticDetails?.name || tacticId}
-                          clickable
-                          component="a"
-                          href={tacticDetails?.url || `https://attack.mitre.org/tactics/${tacticId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          variant="outlined"
-                          color="secondary"
-                        />
-                      );
-                    })}
-                  </Stack>
-                </Box>
-              )}
-
               {/* CVE References */}
               <Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5 }}>
-                  CVE References
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <BubbleChartIcon /> CVE References
                 </Typography>
-                {cve.length > 0 ? (
-                  <Stack direction="row" spacing={1} flexWrap="wrap">
-                    {cve.map(cveId => (
+                {cves && cves.length > 0 ? (
+                  <Stack spacing={1}>
+                    {cves.map((cve, index) => (
                       <Chip
-                        key={cveId}
-                        label={cveId}
+                        key={cve.id || cve.cve_id || index}
+                        label={`${cve.cve_id}: ${cve.description || 'No description available'}`}
                         clickable
                         component="a"
-                        href={`https://cve.mitre.org/cgi-bin/cvename.cgi?name=${cveId}`}
+                        href={`https://nvd.nist.gov/vuln/detail/${cve.cve_id}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         variant="outlined"
                         color="warning"
+                        size="medium"
+                        sx={{ 
+                          justifyContent: 'flex-start',
+                          '& .MuiChip-label': { 
+                            overflow: 'visible', 
+                            textOverflow: 'clip',
+                            whiteSpace: 'normal'
+                          }
+                        }}
                       />
                     ))}
                   </Stack>
-                ) : extracted_cves && extracted_cves.length > 0 ? (
-                  <Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      Extracted from rule content:
-                    </Typography>
-                    <Stack direction="row" spacing={1} flexWrap="wrap">
-                      {extracted_cves.map(cveId => (
-                        <Chip
-                          key={cveId}
-                          label={cveId}
-                          clickable
-                          component="a"
-                          href={`https://cve.mitre.org/cgi-bin/cvename.cgi?name=${cveId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          size="small"
-                          color="warning"
-                          variant="outlined"
-                        />
-                      ))}
-                    </Stack>
-                  </Box>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
                     No CVE references found for this rule.
                   </Typography>
                 )}
               </Box>
+
+              {/* Tactics from threat data */}
+              {raw_rule?.threat && Array.isArray(raw_rule.threat) && raw_rule.threat.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <SecurityIcon /> MITRE ATT&CK Tactics
+                  </Typography>
+                  <Stack spacing={1}>
+                    {raw_rule.threat.map((threat: any, index: number) => (
+                      threat.tactic && (
+                        <Chip
+                          key={`${threat.tactic.id}-${index}`}
+                          label={`${threat.tactic.id}: ${threat.tactic.name}`}
+                          clickable
+                          component="a"
+                          href={threat.tactic.reference || `https://attack.mitre.org/tactics/${threat.tactic.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          variant="outlined"
+                          color="secondary"
+                          size="medium"
+                        />
+                      )
+                    ))}
+                  </Stack>
+                </Box>
+              )}
             </Stack>
           </TabPanel>
         </Box>
@@ -700,10 +707,10 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
 
       {/* Create Issue Modal */}
       <CreateIssueModal
-        isOpen={isModalOpen}
+        open={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        ruleId={id}
-        ruleTitle={title}
+        ruleId={String(id)}
+        ruleName={title || 'Unnamed Rule'}
       />
     </Box>
   );
