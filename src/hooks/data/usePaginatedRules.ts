@@ -1,10 +1,11 @@
 // src/hooks/data/usePaginatedRules.ts
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { keepPreviousData } from '@tanstack/react-query';
-import { useRulesQuery } from '../../api/queries';
+import { useRulesQuery, queryKeys } from '../../api/queries';
 import { PaginationParams, RuleFilters, RuleSummary } from '../../api/types';
 import { GridSortModel } from '@mui/x-data-grid';
 import { useFilterStore } from '../../store/filterStore';
+
 
 export const usePaginatedRules = (initialPage = 1, initialPageSize = 25) => {
   // Get filters from the global filter store
@@ -55,27 +56,24 @@ export const usePaginatedRules = (initialPage = 1, initialPageSize = 25) => {
     setPagination((prev) => ({ ...prev, page: 1 }));
   }, [JSON.stringify(memoizedFilters)]);
 
-  // Main query using our enhanced useRulesQuery
+  // Main query using useRulesQuery
   const {
     data,
     isLoading,
     isError,
     error,
     refetch,
+    isPlaceholderData,
     isFetching,
   } = useRulesQuery(pagination, memoizedFilters, {
-    // Enhanced error handling
-    retry: (failureCount, error: any) => {
-      console.log('usePaginatedRules: Query failed, attempt:', failureCount + 1);
-      // Don't retry on client errors (4xx)
-      if (error?.status >= 400 && error?.status < 500) {
-        console.log('usePaginatedRules: Client error, not retrying');
+    queryKey: queryKeys.rules(memoizedFilters, pagination), // Add the required queryKey
+    retry: (failureCount: number, error: any) => {
+      // Don't retry on 4xx errors
+      if (error?.status && error.status >= 400 && error.status < 500) {
         return false;
       }
-      // Retry up to 2 times for server errors
-      return failureCount < 2;
+      return failureCount < 3;
     },
-    // Keep previous data during pagination for better UX
     placeholderData: keepPreviousData,
   });
 

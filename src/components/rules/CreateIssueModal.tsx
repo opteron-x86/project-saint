@@ -1,5 +1,5 @@
 // src/components/rules/CreateIssueModal.tsx
-import React, { useState } from 'react'; // FIX: Removed unused useEffect
+import React, { useState } from 'react';
 import {
     Box, Button, Modal, Typography, Stepper, Step, StepLabel, CircularProgress
 } from '@mui/material';
@@ -10,7 +10,7 @@ import { CreateIssuePayload, IssueType } from '../../api/types';
 import { IssueTypeSelector, IssueDetailsForm, IssuePreview } from './issue_creator';
 
 const style = {
-  position: 'absolute', // FIX: Changed from `as 'absolute'` to using `as const` on the object
+  position: 'absolute' as const,
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
@@ -25,7 +25,7 @@ const style = {
   borderRadius: 2,
   display: 'flex',
   flexDirection: 'column',
-} as const; // FIX: Added `as const` for modern, safe type inference
+};
 
 const steps = ['Select Issue Type', 'Provide Details', 'Preview & Submit'];
 
@@ -42,7 +42,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ open, onClos
   
   const [activeStep, setActiveStep] = useState(0);
   const [issueType, setIssueType] = useState<IssueType>('False Positive');
-  const [priority, setPriority] = useState('High');
+  const [priority, setPriority] = useState('high');
   const [eventSource, setEventSource] = useState('');
   const [eventTimestamp, setEventTimestamp] = useState('');
   const [description, setDescription] = useState('');
@@ -60,7 +60,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ open, onClos
   const clearForm = () => {
     setActiveStep(0);
     setIssueType('False Positive');
-    setPriority('High');
+    setPriority('high');
     setEventSource('');
     setEventTimestamp('');
     setDescription('');
@@ -73,20 +73,27 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ open, onClos
 
   const handleSubmit = () => {
     const title = `[${issueType}] ${ruleName} - ${description.split('\n')[0].slice(0, 50)}`;
+    
+    // Build markdown description with event details if available
     const markdownDescription = `## ${issueType}\n\n**Rule:** ${ruleName} (\`${ruleId}\`)\n**Priority:** ${priority}\n**Submitted by:** ${auth.user?.profile.email || 'Unknown'}\n\n### Event Details\n${eventSource ? `**Source:** \`${eventSource}\`\n` : ''}${eventTimestamp ? `**Timestamp:** \`${eventTimestamp}\`\n` : ''}\n### Description\n${description}`;
     
     const payload: CreateIssuePayload = {
-      title, issueType, eventSource, eventTimestamp,
-      description: markdownDescription, submittedBy: auth.user?.profile.email || 'Unknown User',
+      rule_id: ruleId,
+      issue_type: issueType, // Fixed: Changed from issueType to issue_type
+      title,
+      description: markdownDescription,
+      priority: priority as 'low' | 'medium' | 'high' | 'critical',
+      contact_email: auth.user?.profile.email || undefined,
     };
 
     createIssueMutation.mutate({ ruleId, payload }, {
       onSuccess: (data) => {
         toast.success(`Issue created successfully!`);
-        window.open(data.issue_url, '_blank');
+        if (data.tracking_url) {
+          window.open(data.tracking_url, '_blank'); // Fixed: Changed from issue_url to tracking_url
+        }
         handleClose();
       },
-      // FIX: Type-safe error handling without using `any`
       onError: (error: unknown) => {
         let errorMessage = 'An unknown error occurred.';
         if (typeof error === 'object' && error !== null) {
@@ -114,7 +121,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ open, onClos
         </Stepper>
 
         <Box sx={{ flexGrow: 1, overflowY: 'auto', pr: 1, mr: -1 }}>
-          {activeStep === 0 && <IssueTypeSelector issueType={issueType} setIssueType={setIssueType as (value: string) => void} setPriority={setPriority} />}
+          {activeStep === 0 && <IssueTypeSelector issueType={issueType} setIssueType={setIssueType} setPriority={setPriority} />}
           {activeStep === 1 && <IssueDetailsForm issueType={issueType} description={description} setDescription={setDescription} eventSource={eventSource} setEventSource={setEventSource} eventTimestamp={eventTimestamp} setEventTimestamp={setEventTimestamp} />}
           {activeStep === 2 && <IssuePreview issueType={issueType} description={description} eventSource={eventSource} eventTimestamp={eventTimestamp} ruleName={ruleName} ruleId={ruleId} />}
         </Box>

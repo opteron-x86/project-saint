@@ -1,7 +1,16 @@
 // src/api/index.ts
 
-// Export all API-related modules
-export * from './client';
-export * from './endpoints';
-export * from './queries';
-export * from './types';
+// Export everything from client except ApiError
+export { 
+    apiGet, 
+    apiPost, 
+    apiPut, 
+    apiDelete,
+  } from './client';
+  
+  // Export everything from types including ApiError
+  export * from './types';
+  
+  // Export other modules
+  export * from './endpoints';
+  export * from './queries';

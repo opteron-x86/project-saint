@@ -46,6 +46,8 @@ import { useRuleQuery } from '@/api/queries';
 import { SEVERITY_DISPLAY, PAGE_SIZES } from '@/utils/constants';
 import { formatDate } from '@/utils/format';
 
+import { ApiError } from '@/api/types';
+
 // Lazy Components
 const LazyRuleDetail = lazy(() => import('@/components/rules/RuleDetail'));
 const LazyRuleCard = lazy(() => import('@/components/rules/RuleCard'));
@@ -172,8 +174,8 @@ const RulesExplorer: React.FC = () => {
     exportMutation.mutate(
       {
         format: 'csv',
-        include_enrichment_data: true,
-        include_rule_content: false,
+        include_enrichments: true,
+        include_raw_content: false, 
         filters: showBookmarkedOnly ? undefined : debugInfo?.currentFilters,
       },
       {
@@ -252,7 +254,7 @@ const RulesExplorer: React.FC = () => {
         <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <ErrorDisplay 
             message={error?.message || 'Failed to load rules'} 
-            details={error?.details ? JSON.stringify(error.details) : undefined}
+            details={(error as any)?.details ? JSON.stringify((error as any).details) : undefined}
             onRetry={handleRefresh}
           />
         </Box>

@@ -365,21 +365,21 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
               </Stack>
               {(processedRule.rule_platforms?.length || processedRule.platforms?.length) ? (
                 <Stack spacing={1}>
-                  {processedRule.rule_platforms?.length > 0 && (
+                  {processedRule.rule_platforms && processedRule.rule_platforms.length > 0 && (
                     <Box>
                       <Typography variant="caption" color="text.secondary">Rule Platforms</Typography>
                       <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
-                        {processedRule.rule_platforms.map((platform: string) => (
+                        {processedRule.rule_platforms!.map((platform: string) => (
                           <Chip key={platform} label={platform} size="small" variant="outlined" />
                         ))}
                       </Stack>
                     </Box>
                   )}
-                  {processedRule.platforms?.length > 0 && (
+                  {processedRule.platforms && processedRule.platforms.length > 0 && (
                     <Box>
                       <Typography variant="caption" color="text.secondary">MITRE Platforms</Typography>
                       <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
-                        {processedRule.platforms.map((platform: string) => (
+                        {processedRule.platforms!.map((platform: string) => (
                           <Chip key={platform} label={platform} size="small" variant="outlined" color="secondary" />
                         ))}
                       </Stack>

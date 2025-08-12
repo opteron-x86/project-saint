@@ -359,7 +359,7 @@ export type IssueType = 'False Positive' | 'Tuning Suggestion' | 'Performance Is
 
 export interface CreateIssuePayload {
   rule_id: string;
-  issue_type: IssueType;
+  issue_type: IssueType; 
   title: string;
   description: string;
   priority?: 'low' | 'medium' | 'high' | 'critical';
@@ -369,10 +369,12 @@ export interface CreateIssuePayload {
 }
 
 export interface CreateIssueResponse {
-  issue_id: string;
-  status: 'created' | 'pending' | 'failed';
+  issue_id?: string;
+  issue_url?: string;  // Added this field that backend returns
+  status?: 'created' | 'pending' | 'failed';
   message?: string;
   tracking_url?: string;
+  rule_id?: string; 
 }
 
 // --- Enhanced Error Types ---

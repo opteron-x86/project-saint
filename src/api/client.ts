@@ -66,7 +66,7 @@ axios.interceptors.response.use(
       console.error('Authorization error - insufficient permissions');
     } else if (status === 429) {
       console.error('Rate limit exceeded - please try again later');
-    } else if (status >= 500) {
+    } else if (status && status >= 500) {
       console.error('Server error - please try again later');
     }
     
