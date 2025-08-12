@@ -6,7 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import { lightTheme, darkTheme } from '@/theme';
 import AppRoutes from '@/routes';
 import { SidebarProvider } from '@/contexts/SidebarContext';
-import { useAuth } from "react-oidc-context"; 
+import { useAuth } from "react-oidc-context";
 
 const LoggedOut = lazy(() => import('@/pages/LoggedOut'));
 
@@ -29,7 +29,7 @@ const SignInPage = () => {
               bgcolor: 'background.paper',
               borderRadius: 2,
               boxShadow: 3,
-              maxWidth: 'sm', 
+              maxWidth: 'sm',
               width: '90%',
             }}>
               <Typography variant="h3" component="h1" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary' }}>
@@ -58,7 +58,6 @@ const SignInPage = () => {
     );
 };
 
-
 function App() {
   const auth = useAuth();
 
@@ -72,7 +71,20 @@ function App() {
 
   useEffect(() => {
     localStorage.setItem('theme-mode', isDarkMode ? 'dark' : 'light');
-  }, [isDarkMode]);
+    
+    // Store auth tokens when authenticated
+    if (auth.isAuthenticated && auth.user) {
+      const idToken = auth.user.id_token;
+      const accessToken = auth.user.access_token;
+      
+      if (idToken) {
+        sessionStorage.setItem('id_token', idToken);
+      }
+      if (accessToken) {
+        sessionStorage.setItem('access_token', accessToken);
+      }
+    }
+  }, [isDarkMode, auth.isAuthenticated, auth.user]);
 
   const toggleTheme = () => {
     setIsDarkMode(!isDarkMode);
