@@ -16,9 +16,13 @@ export interface TechniqueBase {
   is_subtechnique: boolean;
 }
 
+// FIX 1: Extended PaginationParams with sorting fields
 export interface PaginationParams {
   page: number;
   limit: number;
+  sortBy?: string;
+  sortDirection?: 'asc' | 'desc';
+  include_facets?: boolean;
 }
 
 // --- Enhanced MITRE ATT&CK Data Structures ---
@@ -130,6 +134,7 @@ export interface RuleSummary {
   tags?: string[] | null;
 }
 
+// FIX 2: Extended RuleDetail with additional properties and index signature
 export interface RuleDetail extends RuleSummary {
   author?: string | null;
   source_file_path?: string | null;
@@ -140,15 +145,21 @@ export interface RuleDetail extends RuleSummary {
   trinitycyber_details?: TrinityCyberDetails | null;
   mitre_techniques?: MitreTechnique[] | null;
   cve_references?: CveData[] | null;
+  cves?: CveData[] | null; // Added for compatibility
   related_rules?: RuleSummary[] | null;
+  rule_metadata?: Record<string, unknown> | null;
+  rule_content?: string | null;
+  is_active?: boolean;
+  validation_status?: string;
+  [key: string]: any; // Index signature for type casting
 }
 
 // --- API Response Types (Matching Lambda format) ---
 export interface FetchRulesResponse {
-  rules: RuleSummary[];  // Frontend expects 'rules' property
-  items?: RuleSummary[];  // API returns 'items'
+  rules: RuleSummary[];
+  items?: RuleSummary[];
   total: number;
-  offset: number;  // API uses offset/limit, not page
+  offset: number;
   limit: number;
   page?: number;
   totalPages?: number;
@@ -249,7 +260,7 @@ export interface FilterOptionsResponse {
   enrichment_levels: FilterOption[];
 }
 
-// --- Filters for API Requests ---
+// FIX 3: Extended RuleFilters with enrichment fields
 export interface RuleFilters {
   search?: string;
   query?: string;
@@ -267,98 +278,106 @@ export interface RuleFilters {
   has_mitre?: boolean;
   has_cves?: boolean;
   is_active?: boolean;
-}
-
-// --- Dashboard and Analytics ---
-export interface DashboardStats {
-  total_rules: number;
-  active_rules: number;
-  mitre_coverage: {
-    percentage: number;
-    techniques_covered: number;
-    total_techniques: number;
-  };
-  cve_coverage: {
-    percentage: number;
-    cves_referenced: number;
-    critical_cves: number;
-  };
-  severity_distribution: Record<string, number>;
-  platform_distribution: Record<string, number>;
-  recent_updates: {
-    rules_added_24h: number;
-    rules_modified_7d: number;
-  };
-  top_gaps: Array<{
-    technique_id: string;
-    name: string;
-    priority: string;
-  }>;
-}
-
-export interface TrendData {
-  period: string;
-  data_points: Array<{
-    date: string;
-    total_rules: number;
-    mitre_coverage: number;
-    cve_coverage: number;
-  }>;
-  trends: {
-    rules_growth: number;
-    coverage_improvement: number;
-  };
+  // Added enrichment filter fields
+  has_mitre_mapping?: boolean;
+  has_cve_references?: boolean;
+  enrichment_score_min?: number;
 }
 
 // --- Export Options ---
+// FIX 4: Corrected ExportOptions interface
 export interface ExportOptions {
-  format: 'json' | 'csv';
-  include_enrichments?: boolean;
+  format: 'json' | 'csv' | 'yaml';
+  include_enrichments?: boolean; // Changed from include_enrichment_data
   include_raw_content?: boolean;
-  include_rule_content?: boolean;
   filters?: RuleFilters;
 }
 
 export interface ExportResponse {
+  file_url?: string;
   download_url?: string;
-  expires_at?: string;
-  file_size_bytes?: number;
-  record_count?: number;
-  data?: any;  // For direct data response
+  content?: string;
+  filename: string;
+  format: string;
+  rules_count: number;
+  created_at: string;
 }
 
-// --- Global Search (Matching Lambda format) ---
+// --- Global Search ---
+export interface GlobalSearchResult {
+  type: 'rule' | 'technique' | 'cve' | 'tactic';
+  id: string;
+  title: string;
+  description?: string;
+  relevance_score: number;
+  highlights?: string[];
+  metadata?: Record<string, any>;
+}
+
 export interface GlobalSearchResponse {
-  results: {
-    rules: RuleSummary[];
-    mitre_techniques: MitreTechnique[];
-    cves: CveData[];
-    total_count: number;
-  };
+  results: GlobalSearchResult[];
+  total: number;
   query: string;
-  took_ms?: number;
+  types_searched: string[];
+  facets?: {
+    by_type: Record<string, number>;
+  };
+}
+
+// --- Analytics and Dashboard ---
+export interface DashboardStats {
+  total_rules: number;
+  active_rules: number;
+  coverage_percentage: number;
+  recent_activity: {
+    new_rules_24h: number;
+    updated_rules_24h: number;
+    new_techniques_covered_7d: number;
+  };
+  top_sources: Array<{ name: string; count: number }>;
+  severity_distribution: Record<string, number>;
+  platform_distribution: Record<string, number>;
+  enrichment_summary: {
+    rules_with_mitre: number;
+    rules_with_cves: number;
+    average_enrichment_score: number;
+  };
+}
+
+export interface TrendData {
+  date: string;
+  rules_count: number;
+  techniques_covered: number;
+  coverage_percentage: number;
+  new_rules?: number;
+  updated_rules?: number;
 }
 
 // --- Issue Creation ---
-export type IssueType =
-  | 'False Positive'
-  | 'Tuning Suggestion'
-  | 'General Query'
-  | 'Performance Issue'
-  | 'Missing Detection'
-  | 'Bug Report';
+export type IssueType = 'False Positive' | 'Tuning Suggestion' | 'Performance Issue' | 
+                        'Missing Detection' | 'Bug Report' | 'General Query';
 
 export interface CreateIssuePayload {
+  rule_id: string;
+  issue_type: IssueType;
   title: string;
-  issueType: IssueType;
-  eventSource: string;
-  eventTimestamp: string;
   description: string;
-  submittedBy: string;
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+  affected_platforms?: string[];
+  suggested_fix?: string;
+  contact_email?: string;
 }
 
 export interface CreateIssueResponse {
-  message: string;
-  issue_url: string;
-  rule_id: string;
+  issue_id: string;
+  status: 'created' | 'pending' | 'failed';
+  message?: string;
+  tracking_url?: string;
+}
+
+// --- Enhanced Error Types ---
+export interface ApiError extends Error {
+  status?: number;
+  details?: any;
+  code?: string;
 }
