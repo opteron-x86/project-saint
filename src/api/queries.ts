@@ -94,7 +94,7 @@ export const queryKeys = {
   ],
   
   // CVEs
-  cves: (pagination: PaginationParams, filters?: any) => [
+  cves: (pagination: PaginationParams, filters?: { severities?: string[]; with_rules_only?: boolean; query?: string }) => [
     'cves',
     JSON.stringify(pagination),
     filters ? JSON.stringify(filters) : 'no_filters',
@@ -175,9 +175,9 @@ export const useRuleStatsQuery = (
 };
 
 export const useRuleEnrichmentStatsQuery = (
-  options?: UseQueryOptions<any, Error>
+  options?: UseQueryOptions<Record<string, unknown>, Error>
 ) => {
-  return useQuery<any, Error>({
+  return useQuery<Record<string, unknown>, Error>({
     queryKey: queryKeys.ruleEnrichmentStats(),
     queryFn: fetchRuleEnrichmentStats,
     staleTime: 5 * 60 * 1000,
@@ -214,9 +214,9 @@ export const useTechniqueCoverageQuery = (
 export const useMitreTechniquesQuery = (
   pagination: PaginationParams,
   search?: string,
-  options?: UseQueryOptions<{ items: MitreTechnique[]; total: number }, Error>
+  options?: UseQueryOptions<{ techniques: MitreTechnique[]; total: number }, Error>
 ) => {
-  return useQuery<{ items: MitreTechnique[]; total: number }, Error>({
+  return useQuery<{ techniques: MitreTechnique[]; total: number }, Error>({
     queryKey: queryKeys.mitreTechniques(pagination, search),
     queryFn: () => fetchMitreTechniques(pagination, search),
     placeholderData: keepPreviousData,

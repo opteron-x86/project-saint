@@ -16,7 +16,7 @@ export interface TechniqueBase {
   is_subtechnique: boolean;
 }
 
-// FIX 1: Extended PaginationParams with sorting fields
+// Extended PaginationParams with sorting fields
 export interface PaginationParams {
   page: number;
   limit: number;
@@ -26,25 +26,34 @@ export interface PaginationParams {
 }
 
 // --- Enhanced MITRE ATT&CK Data Structures ---
-export interface MitreTechnique extends TechniqueBase {
+export interface MitreTechnique {
+  id: string;                           // This will be the technique_id (e.g., "T1059")
+  name: string;
   description?: string | null;
-  platforms: string[];
-  subtechniques: MitreTechnique[];
+  url?: string | null;
+  is_subtechnique: boolean;
   is_deprecated?: boolean;
   stix_id?: string | null;
+  platforms: string[];
+  data_sources?: string[];
+  subtechniques: MitreTechnique[];      // Nested subtechniques
   rule_count?: number;
   coverage_percentage?: number;
+  // Additional fields that may come from API
+  parent_technique_id?: string | null;
+  tactics?: string[];                   // Associated tactics
 }
 
 export interface MitreTactic {
-  id: string;
+  id: string;                           // This will be the tactic_id (e.g., "TA0001")
+  tactic_id?: string;                   // Keep original tactic_id for reference
   stix_id?: string | null;
   name: string;
   shortname?: string | null;
   description?: string | null;
   url?: string | null;
   matrix_order?: number | null;
-  techniques: MitreTechnique[];
+  techniques: MitreTechnique[];         // Top-level techniques only
   rule_count?: number;
 }
 
@@ -180,10 +189,14 @@ export interface TechniqueRuleInfo {
   platforms: string[];
   rule_source?: string;
   enrichment_score?: number;
+  // Additional fields from API
+  tags?: string[];
+  created_date?: string | null;
+  modified_date?: string | null;
 }
 
 export interface TechniqueCoverageDetail {
-  technique_id: string;
+  technique_id: string;                 // Should match MitreTechnique.id
   name: string;
   count: number;
   rules: TechniqueRuleInfo[];
@@ -200,15 +213,11 @@ export interface TechniquesCoverageResponse {
   techniques: TechniqueCoverageDetail[];
   platform_filter_applied?: string | null;
   rule_platform_filter_applied?: string | null;
-  coverage_gaps?: {
-    technique_id: string;
-    name: string;
-    priority: 'high' | 'medium' | 'low';
-    platforms: string[];
-  }[];
-  trending?: {
-    improving: TechniqueCoverageDetail[];
-    declining: TechniqueCoverageDetail[];
+  coverage_gaps?: string[];
+  // Additional metadata from API
+  metadata?: {
+    last_updated?: string;
+    data_source?: string;
   };
 }
 
