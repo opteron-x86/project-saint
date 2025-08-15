@@ -5,10 +5,10 @@ import {
   useTechniqueCoverageQuery,
   useFilterOptionsQuery,
 } from '@/api/queries';
+import { MitreTactic, TechniquesCoverageResponse } from '@/api/types';
 
 /**
  * Custom hook to fetch and process MITRE ATT&CK data with coverage information.
- * It relies on dedicated TanStack Query hooks for fetching.
  */
 export const useMitreAttackData = (platformFilter?: string | null) => {
   // Fetch the full matrix data (tactics with nested techniques/subtechniques)
@@ -17,7 +17,8 @@ export const useMitreAttackData = (platformFilter?: string | null) => {
     isLoading: isLoadingMatrix,
     isError: isErrorMatrix,
     error: errorMatrix,
-  } = useMitreMatrixQuery(); // Default staleTime is Infinity
+    refetch: refetchMatrix,
+  } = useMitreMatrixQuery();
 
   // Fetch technique coverage data, potentially filtered by platform
   const {
@@ -25,25 +26,44 @@ export const useMitreAttackData = (platformFilter?: string | null) => {
     isLoading: isLoadingCoverage,
     isError: isErrorCoverage,
     error: errorCoverage,
-  } = useTechniqueCoverageQuery(platformFilter); 
+    refetch: refetchCoverage,
+  } = useTechniqueCoverageQuery(platformFilter);
 
-  // Fetch filter options (e.g., for deriving all known platforms if needed)
+  // Fetch filter options for platforms and rule sources
   const { data: filterOptionsData } = useFilterOptionsQuery();
 
+  // Process and validate matrix data
   const processedMatrix = useMemo(() => {
     if (!matrixData) return null;
-    // The matrixData should already be in the desired List[TacticResponse] format
-    // where TacticResponse includes nested MitreTechniqueResponse (with subtechniques & platforms).
-    // So, direct assignment or minimal transformation might be needed.
-    return matrixData; // Assuming matrixData is already MitreMatrixData (i.e., MitreTactic[])
+    
+    // Ensure data is in the expected format
+    if (!Array.isArray(matrixData)) {
+      console.error('Matrix data is not an array:', matrixData);
+      return null;
+    }
+    
+    // Validate and clean the matrix data
+    return matrixData.map((tactic: MitreTactic) => ({
+      ...tactic,
+      // Ensure techniques array exists
+      techniques: (tactic.techniques || []).map(technique => ({
+        ...technique,
+        // Ensure subtechniques array exists
+        subtechniques: technique.subtechniques || [],
+        // Ensure platforms array exists
+        platforms: technique.platforms || [],
+      }))
+    }));
   }, [matrixData]);
 
-  // Extract available platforms from filter options or matrix data as a fallback
+  // Extract available platforms from filter options or matrix data
   const availablePlatforms = useMemo(() => {
+    // Primary source: filter options
     if (filterOptionsData?.platforms && filterOptionsData.platforms.length > 0) {
       return filterOptionsData.platforms.map(p => p.value).sort();
     }
-    // Fallback: derive from the matrix if filter options not available/loaded yet
+    
+    // Fallback: derive from matrix data
     if (processedMatrix) {
       const platforms = new Set<string>();
       processedMatrix.forEach(tactic => {
@@ -56,38 +76,62 @@ export const useMitreAttackData = (platformFilter?: string | null) => {
       });
       return Array.from(platforms).sort();
     }
+    
     return [];
   }, [processedMatrix, filterOptionsData]);
 
-  // Extract available rule sources (example, if needed from coverage, though /filters/options is better)
+  // Extract available rule sources from filter options
   const availableRuleSources = useMemo(() => {
     if (filterOptionsData?.rule_sources && filterOptionsData.rule_sources.length > 0) {
-        return filterOptionsData.rule_sources.map(s => s.value).sort();
-    }
-    // Fallback if needed, but less comprehensive
-    if (coverageData?.techniques) {
-      const sources = new Set<string>();
-      coverageData.techniques.forEach(techDetail => {
-        techDetail.rules.forEach(rule => {
-          // Assuming TechniqueRuleInfo doesn't have rule_source, this would need adjustment
-          // or the primary source for this is filterOptionsData
-        });
-      });
-      return Array.from(sources).sort();
+      return filterOptionsData.rule_sources.map(s => ({
+        value: s.value,
+        label: s.label,
+        count: 'rule_count' in s ? (s as any).rule_count : 0
+      }));
     }
     return [];
-  }, [coverageData, filterOptionsData]);
+  }, [filterOptionsData]);
+
+  // Process coverage data to ensure consistency with matrix IDs
+  const processedCoverage = useMemo(() => {
+    if (!coverageData) return null;
+    
+    return {
+      ...coverageData,
+      // Ensure technique IDs in coverage match the format used in matrix
+      techniques: coverageData.techniques.map(tech => ({
+        ...tech,
+        // technique_id should match the 'id' field in MitreTechnique
+        technique_id: tech.technique_id,
+      }))
+    } as TechniquesCoverageResponse;
+  }, [coverageData]);
+
+  // Create a map for quick coverage lookups
+  const coverageMap = useMemo(() => {
+    if (!processedCoverage) return new Map();
+    
+    const map = new Map();
+    processedCoverage.techniques.forEach(tech => {
+      map.set(tech.technique_id, tech);
+    });
+    return map;
+  }, [processedCoverage]);
 
   return {
     matrix: processedMatrix,
-    coverage: coverageData, 
+    coverage: processedCoverage,
+    coverageMap,
     availablePlatforms,
     availableRuleSources,
     isLoading: isLoadingMatrix || isLoadingCoverage,
     isError: isErrorMatrix || isErrorCoverage,
     error: errorMatrix || errorCoverage,
+    refetch: () => {
+      refetchMatrix();
+      refetchCoverage();
+    }
   };
 };
-
 
 export default useMitreAttackData;

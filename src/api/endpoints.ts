@@ -168,7 +168,53 @@ export const exportRules = async (options: ExportOptions): Promise<ExportRespons
 // --- MITRE ENDPOINTS ---
 
 export const fetchMitreMatrix = async (): Promise<MitreMatrixData> => {
-  return await apiGet<MitreMatrixData>(ENDPOINTS.MITRE_MATRIX);
+  const response = await apiGet<any>(ENDPOINTS.MITRE_MATRIX);
+  
+  // API returns data wrapped in 'matrix' field
+  const matrixData = response.matrix || response;
+  
+  // Transform the API response to match frontend expectations
+  return matrixData.map((tactic: any) => ({
+    // Core tactic fields
+    id: tactic.tactic_id || tactic.id, // Use tactic_id as the primary ID for consistency
+    stix_id: tactic.stix_id || null,
+    name: tactic.name || '',
+    shortname: tactic.shortname || null,
+    description: tactic.description || null,
+    url: tactic.url || null,
+    matrix_order: tactic.matrix_order || null,
+    rule_count: tactic.rule_count || 0,
+    
+    // Transform techniques array
+    techniques: (tactic.techniques || []).map((technique: any) => ({
+      // Use technique_id as the primary identifier
+      id: technique.technique_id || technique.id,
+      name: technique.name || '',
+      url: technique.url || null,
+      description: technique.description || null,
+      is_subtechnique: technique.is_subtechnique || false,
+      is_deprecated: technique.is_deprecated || false,
+      stix_id: technique.stix_id || null,
+      platforms: technique.platforms || [],
+      rule_count: technique.rule_count || 0,
+      coverage_percentage: technique.coverage_percentage || 0,
+      
+      // Transform subtechniques
+      subtechniques: (technique.subtechniques || []).map((subtech: any) => ({
+        id: subtech.technique_id || subtech.id,
+        name: subtech.name || '',
+        url: subtech.url || null,
+        description: subtech.description || null,
+        is_subtechnique: true,
+        is_deprecated: subtech.is_deprecated || false,
+        stix_id: subtech.stix_id || null,
+        platforms: subtech.platforms || [],
+        rule_count: subtech.rule_count || 0,
+        coverage_percentage: subtech.coverage_percentage || 0,
+        subtechniques: [] // Subtechniques don't have their own subtechniques
+      }))
+    }))
+  }));
 };
 
 export const fetchTechniqueCoverage = async (
@@ -179,13 +225,42 @@ export const fetchTechniqueCoverage = async (
   if (platform) params.platform = platform;
   if (rulePlatform) params.rule_platform = rulePlatform;
   
-  return await apiGet<TechniquesCoverageResponse>(ENDPOINTS.MITRE_COVERAGE, params);
+  const response = await apiGet<any>(ENDPOINTS.MITRE_COVERAGE, params);
+  
+  // Transform coverage response to ensure technique_id matches the ID format used in matrix
+  return {
+    total_techniques: response.total_techniques || 0,
+    covered_techniques: response.covered_techniques || 0,
+    coverage_percentage: response.coverage_percentage || 0,
+    platform_filter_applied: response.platform_filter_applied || null,
+    rule_platform_filter_applied: response.rule_platform_filter_applied || null,
+    coverage_gaps: response.coverage_gaps || [],
+    
+    // Ensure technique_id in coverage matches the ID format from matrix
+    techniques: (response.techniques || []).map((tech: any) => ({
+      technique_id: tech.technique_id || tech.id, // This should match the 'id' field in MitreTechnique
+      name: tech.name || '',
+      count: tech.count || 0,
+      rules: (tech.rules || []).map((rule: any) => ({
+        id: String(rule.id),
+        title: rule.title || rule.name || '',
+        severity: rule.severity || 'unknown',
+        platforms: rule.platforms || [],
+        rule_source: rule.rule_source || '',
+        enrichment_score: rule.enrichment_score || 0
+      })),
+      coverage_quality: tech.coverage_quality || 'poor',
+      platforms_covered: tech.platforms_covered || [],
+      rule_sources_covering: tech.rule_sources_covering || [],
+      last_updated: tech.last_updated || null
+    }))
+  };
 };
 
 export const fetchMitreTechniques = async (
   pagination?: PaginationParams,
   search?: string
-): Promise<{ items: MitreTechnique[]; total: number }> => {
+): Promise<{ techniques: MitreTechnique[]; total: number }> => {
   const params: Record<string, any> = {};
   
   if (pagination) {
@@ -193,12 +268,43 @@ export const fetchMitreTechniques = async (
     params.limit = pagination.limit;
   }
   
-  if (search) params.query = search;
+  if (search) {
+    params.search = search;
+  }
   
-  return await apiGet<{ items: MitreTechnique[]; total: number }>(
-    ENDPOINTS.MITRE_TECHNIQUES,
-    params
-  );
+  const response = await apiGet<any>(ENDPOINTS.MITRE_TECHNIQUES, params);
+  
+  // Transform techniques to match frontend expectations
+  const techniques = (response.techniques || response.items || []).map((tech: any) => ({
+    id: tech.technique_id || tech.id,
+    name: tech.name || '',
+    url: tech.url || null,
+    description: tech.description || null,
+    is_subtechnique: tech.is_subtechnique || false,
+    is_deprecated: tech.is_deprecated || false,
+    stix_id: tech.stix_id || null,
+    platforms: tech.platforms || [],
+    rule_count: tech.rule_count || 0,
+    coverage_percentage: tech.coverage_percentage || 0,
+    subtechniques: (tech.subtechniques || []).map((subtech: any) => ({
+      id: subtech.technique_id || subtech.id,
+      name: subtech.name || '',
+      url: subtech.url || null,
+      description: subtech.description || null,
+      is_subtechnique: true,
+      is_deprecated: subtech.is_deprecated || false,
+      stix_id: subtech.stix_id || null,
+      platforms: subtech.platforms || [],
+      rule_count: subtech.rule_count || 0,
+      coverage_percentage: subtech.coverage_percentage || 0,
+      subtechniques: []
+    }))
+  }));
+  
+  return {
+    techniques,
+    total: response.total || techniques.length
+  };
 };
 
 // --- CVE ENDPOINTS ---
