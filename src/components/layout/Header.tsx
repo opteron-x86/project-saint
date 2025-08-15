@@ -8,10 +8,11 @@ import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import HistoryIcon from '@mui/icons-material/History'; // For recently viewed
+import HistoryIcon from '@mui/icons-material/History';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useAuth } from 'react-oidc-context';
-import { useRuleStore } from '@/store'; // Import the rule store
-import { useNavigate } from 'react-router-dom'; // To navigate on click
+import { useRuleStore } from '@/store'; 
+import { useNavigate } from 'react-router-dom';
 
 interface HeaderProps {
   pageTitle: string;
@@ -28,16 +29,12 @@ const Header: React.FC<HeaderProps> = ({
   const auth = useAuth();
   const navigate = useNavigate();
 
-  // State for user profile menu
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
 
-  // --- FIX APPLIED HERE ---
-  // State for recently viewed menu
   const [historyAnchorEl, setHistoryAnchorEl] = React.useState<null | HTMLElement>(null);
   const historyOpen = Boolean(historyAnchorEl);
   
-  // Get recently viewed rules from the store
   const { recentlyViewedRules, selectRule } = useRuleStore();
 
   const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -58,12 +55,9 @@ const Header: React.FC<HeaderProps> = ({
 
   const handleHistoryItemClick = (rule: any) => {
     handleHistoryMenuClose();
-    // Use the store to select the rule, which can be picked up by the RulesExplorer page
     selectRule(rule);
-    // Navigate to the explorer and open the detail drawer
     navigate('/rules', { state: { openRuleId: rule.id } });
   };
-  // --- END FIX ---
 
   const handleSignOut = () => {
     handleProfileMenuClose();
@@ -71,6 +65,9 @@ const Header: React.FC<HeaderProps> = ({
         console.error("Error during signoutRedirect:", err);
     });
   };
+
+  // Split the title into brand and page parts
+  const [brandPart, pagePart] = pageTitle.split(' | ');
 
   return (
     <Box
@@ -81,22 +78,47 @@ const Header: React.FC<HeaderProps> = ({
         justifyContent: 'space-between',
       }}
     >
-      <Typography
-        variant="h5"
-        color="text.primary"
-        noWrap
-        component="div"
-        sx={{
-          fontWeight: 600,
-          flexGrow: 1,
-        }}
-      >
-        {pageTitle}
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexGrow: 1 }}>
+        <Typography
+          variant="h6"
+          noWrap
+          component="div"
+          sx={{
+            fontWeight: 700,
+            background: 'linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            letterSpacing: '-0.5px',
+            fontFamily: '"Inter", "Roboto", sans-serif',
+          }}
+        >
+          {brandPart}
+        </Typography>
+        
+        <ChevronRightIcon 
+          sx={{ 
+            color: 'text.disabled', 
+            fontSize: 20,
+            opacity: 0.4,
+          }} 
+        />
+        
+        <Typography
+          variant="h6"
+          color="text.primary"
+          noWrap
+          component="div"
+          sx={{
+            fontWeight: 500,
+            fontSize: '1.1rem',
+          }}
+        >
+          {pagePart}
+        </Typography>
+      </Box>
 
       <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-        {/* --- FIX APPLIED HERE --- */}
-        {/* Added History/Recently Viewed button and menu */}
         <Tooltip title="Recently Viewed">
           <IconButton color="inherit" size="large" onClick={handleHistoryMenuOpen}>
             <HistoryIcon />
@@ -120,9 +142,8 @@ const Header: React.FC<HeaderProps> = ({
             recentlyViewedRules.map(rule => (
               <MenuItem key={rule.id} onClick={() => handleHistoryItemClick(rule)}>
                 <ListItemText 
-                  primary={<Typography variant="body2" noWrap>{rule.title}</Typography>}
-                  secondary={<Typography variant="caption" color="text.secondary">{rule.id}</Typography>}
-                />
+                  primary={<Typography variant="body2" noWrap>{rule.name}</Typography>}
+                 />
               </MenuItem>
             ))
           ) : (
@@ -131,7 +152,6 @@ const Header: React.FC<HeaderProps> = ({
             </MenuItem>
           )}
         </Menu>
-        {/* --- END FIX --- */}
 
         <Tooltip title="Notifications">
           <IconButton color="inherit" size="large">

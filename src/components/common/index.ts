@@ -9,3 +9,4 @@ export { default as FilterChip } from './FilterChip';
 export { default as PerformanceMonitor } from './PerformanceMonitor';
 export { default as UnderConstruction } from './UnderConstruction';
 export { default as UnderConstructionWrapper } from './UnderConstructionWrapper';
+export { default as ClassificationBanner } from './ClassificationBanner';

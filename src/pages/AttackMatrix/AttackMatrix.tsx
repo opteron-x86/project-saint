@@ -350,19 +350,7 @@ const AttackMatrix: React.FC = () => {
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       {/* Header Controls */}
       <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h5" fontWeight={600}>
-            MITRE ATT&CK® Matrix
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Tooltip title="Refresh data">
-              <IconButton onClick={refetchMatrixData} size="small">
-                <RefreshIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        </Box>
-        
+     
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* TODO: Fix SearchBar props interface
           <SearchBar
@@ -389,6 +377,13 @@ const AttackMatrix: React.FC = () => {
                 Clear
               </Button>
             )}
+            <Box sx={{ display: 'flex', gap: 1 }}>
+            <Tooltip title="Refresh data">
+              <IconButton onClick={refetchMatrixData} size="small">
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
           </Box>
         </Box>
       </Box>
