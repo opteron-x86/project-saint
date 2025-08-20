@@ -1,4 +1,5 @@
 // src/api/endpoints.ts
+// Simplified version that works with the fixed backend API
 
 import { apiGet, apiPost } from './client';
 import {
@@ -103,59 +104,53 @@ const buildQueryParams = (
 
 // --- RULES ENDPOINTS ---
 
+/**
+ * Fetch rules with pagination and filters
+ * No transformation needed - backend now returns correct field names
+ */
 export const fetchRules = async (
   pagination?: PaginationParams,
   filters?: RuleFilters
 ): Promise<FetchRulesResponse> => {
   const params = buildQueryParams(pagination, filters);
-  const response = await apiGet<any>(ENDPOINTS.RULES, params);
+  const response = await apiGet<FetchRulesResponse>(ENDPOINTS.RULES, params);
   
-  // Transform each rule item
-  const transformedRules = (response.items || []).map((item: any) => ({
-    id: String(item.id),
-    source_rule_id: item.rule_id || null,
-    title: item.name || '',  // Map 'name' to 'title'
-    description: item.description || null,
-    platforms: item.platforms || null,
-    rule_source: item.source?.name || item.rule_type || '',
-    severity: item.severity || 'unknown',
-    status: item.is_active ? 'active' : 'inactive',
-    created_date: item.created_date || null,
-    modified_date: item.updated_date || item.modified_date || null,
-    rule_platforms: item.rule_platforms || null,
-    linked_technique_ids: item.linked_technique_ids || null,
-    has_mitre_mapping: item.extracted_mitre_count > 0,
-    has_cve_references: item.extracted_cve_count > 0,
-    enrichment_score: item.enrichment_score,
-    tags: item.tags || null
-  }));
-  
-  return {
-    rules: transformedRules,
-    items: transformedRules,
-    total: response.total || 0,
-    offset: response.offset || 0,
-    limit: response.limit || pagination?.limit || 100,
-    page: pagination?.page || 1,
-    totalPages: Math.ceil((response.total || 0) / (pagination?.limit || 100)),
-    facets: response.facets
-  };
+  // Backend now returns the correct structure
+  // No transformation needed
+  return response;
 };
 
+/**
+ * Fetch rule by ID
+ * Direct pass-through as backend returns correct format
+ */
 export const fetchRuleById = async (id: string): Promise<RuleDetail> => {
   return await apiGet<RuleDetail>(ENDPOINTS.RULE_BY_ID(id));
 };
 
-export const fetchRuleStats = async (filters?: RuleFilters): Promise<FetchRuleStatsResponse> => {
+/**
+ * Fetch rule statistics
+ */
+export const fetchRuleStats = async (
+  filters?: RuleFilters
+): Promise<FetchRuleStatsResponse> => {
   const params = buildQueryParams(undefined, filters);
   return await apiGet<FetchRuleStatsResponse>(ENDPOINTS.RULES_STATS, params);
 };
 
+/**
+ * Fetch rule enrichment statistics
+ */
 export const fetchRuleEnrichmentStats = async (): Promise<any> => {
   return await apiGet<any>(ENDPOINTS.RULES_ENRICHMENT);
 };
 
-export const exportRules = async (options: ExportOptions): Promise<ExportResponse> => {
+/**
+ * Export rules in various formats
+ */
+export const exportRules = async (
+  options: ExportOptions
+): Promise<ExportResponse> => {
   const params = {
     format: options.format,
     include_enrichments: options.include_enrichments,
@@ -167,96 +162,53 @@ export const exportRules = async (options: ExportOptions): Promise<ExportRespons
 
 // --- MITRE ENDPOINTS ---
 
+/**
+ * Fetch MITRE ATT&CK matrix
+ * Minimal transformation for consistency
+ */
 export const fetchMitreMatrix = async (): Promise<MitreMatrixData> => {
   const response = await apiGet<any>(ENDPOINTS.MITRE_MATRIX);
   
   // API returns data wrapped in 'matrix' field
   const matrixData = response.matrix || response;
   
-  // Transform the API response to match frontend expectations
+  // Ensure consistent ID field naming
   return matrixData.map((tactic: any) => ({
-    // Core tactic fields
-    id: tactic.tactic_id || tactic.id, // Use tactic_id as the primary ID for consistency
-    stix_id: tactic.stix_id || null,
-    name: tactic.name || '',
-    shortname: tactic.shortname || null,
-    description: tactic.description || null,
-    url: tactic.url || null,
-    matrix_order: tactic.matrix_order || null,
-    rule_count: tactic.rule_count || 0,
-    
-    // Transform techniques array
+    ...tactic,
+    id: tactic.tactic_id || tactic.id,
     techniques: (tactic.techniques || []).map((technique: any) => ({
-      // Use technique_id as the primary identifier
+      ...technique,
       id: technique.technique_id || technique.id,
-      name: technique.name || '',
-      url: technique.url || null,
-      description: technique.description || null,
-      is_subtechnique: technique.is_subtechnique || false,
-      is_deprecated: technique.is_deprecated || false,
-      stix_id: technique.stix_id || null,
-      platforms: technique.platforms || [],
-      rule_count: technique.rule_count || 0,
-      coverage_percentage: technique.coverage_percentage || 0,
-      
-      // Transform subtechniques
       subtechniques: (technique.subtechniques || []).map((subtech: any) => ({
+        ...subtech,
         id: subtech.technique_id || subtech.id,
-        name: subtech.name || '',
-        url: subtech.url || null,
-        description: subtech.description || null,
-        is_subtechnique: true,
-        is_deprecated: subtech.is_deprecated || false,
-        stix_id: subtech.stix_id || null,
-        platforms: subtech.platforms || [],
-        rule_count: subtech.rule_count || 0,
-        coverage_percentage: subtech.coverage_percentage || 0,
-        subtechniques: [] // Subtechniques don't have their own subtechniques
       }))
     }))
   }));
 };
 
+/**
+ * Fetch technique coverage analysis
+ */
 export const fetchTechniqueCoverage = async (
   platform?: string | null,
-  rulePlatform?: string | null
+  rulePlatform?: string | null,
+  includeSubtechniques?: boolean
 ): Promise<TechniquesCoverageResponse> => {
   const params: Record<string, any> = {};
+  
   if (platform) params.platform = platform;
   if (rulePlatform) params.rule_platform = rulePlatform;
+  if (includeSubtechniques !== undefined) {
+    params.include_subtechniques = includeSubtechniques;
+  }
   
-  const response = await apiGet<any>(ENDPOINTS.MITRE_COVERAGE, params);
-  
-  // Transform coverage response to ensure technique_id matches the ID format used in matrix
-  return {
-    total_techniques: response.total_techniques || 0,
-    covered_techniques: response.covered_techniques || 0,
-    coverage_percentage: response.coverage_percentage || 0,
-    platform_filter_applied: response.platform_filter_applied || null,
-    rule_platform_filter_applied: response.rule_platform_filter_applied || null,
-    coverage_gaps: response.coverage_gaps || [],
-    
-    // Ensure technique_id in coverage matches the ID format from matrix
-    techniques: (response.techniques || []).map((tech: any) => ({
-      technique_id: tech.technique_id || tech.id, // This should match the 'id' field in MitreTechnique
-      name: tech.name || '',
-      count: tech.count || 0,
-      rules: (tech.rules || []).map((rule: any) => ({
-        id: String(rule.id),
-        title: rule.title || rule.name || '',
-        severity: rule.severity || 'unknown',
-        platforms: rule.platforms || [],
-        rule_source: rule.rule_source || '',
-        enrichment_score: rule.enrichment_score || 0
-      })),
-      coverage_quality: tech.coverage_quality || 'poor',
-      platforms_covered: tech.platforms_covered || [],
-      rule_sources_covering: tech.rule_sources_covering || [],
-      last_updated: tech.last_updated || null
-    }))
-  };
+  return await apiGet<TechniquesCoverageResponse>(ENDPOINTS.MITRE_COVERAGE, params);
 };
 
+/**
+ * Fetch paginated MITRE techniques
+ */
 export const fetchMitreTechniques = async (
   pagination?: PaginationParams,
   search?: string
@@ -274,30 +226,13 @@ export const fetchMitreTechniques = async (
   
   const response = await apiGet<any>(ENDPOINTS.MITRE_TECHNIQUES, params);
   
-  // Transform techniques to match frontend expectations
+  // Ensure consistent technique ID field
   const techniques = (response.techniques || response.items || []).map((tech: any) => ({
+    ...tech,
     id: tech.technique_id || tech.id,
-    name: tech.name || '',
-    url: tech.url || null,
-    description: tech.description || null,
-    is_subtechnique: tech.is_subtechnique || false,
-    is_deprecated: tech.is_deprecated || false,
-    stix_id: tech.stix_id || null,
-    platforms: tech.platforms || [],
-    rule_count: tech.rule_count || 0,
-    coverage_percentage: tech.coverage_percentage || 0,
     subtechniques: (tech.subtechniques || []).map((subtech: any) => ({
+      ...subtech,
       id: subtech.technique_id || subtech.id,
-      name: subtech.name || '',
-      url: subtech.url || null,
-      description: subtech.description || null,
-      is_subtechnique: true,
-      is_deprecated: subtech.is_deprecated || false,
-      stix_id: subtech.stix_id || null,
-      platforms: subtech.platforms || [],
-      rule_count: subtech.rule_count || 0,
-      coverage_percentage: subtech.coverage_percentage || 0,
-      subtechniques: []
     }))
   }));
   
@@ -309,6 +244,9 @@ export const fetchMitreTechniques = async (
 
 // --- CVE ENDPOINTS ---
 
+/**
+ * Fetch CVEs with pagination and filters
+ */
 export const fetchCves = async (
   pagination?: PaginationParams,
   filters?: { severities?: string[]; with_rules_only?: boolean; query?: string }
@@ -329,22 +267,34 @@ export const fetchCves = async (
   return await apiGet<{ items: CveData[]; total: number }>(ENDPOINTS.CVES, params);
 };
 
+/**
+ * Fetch CVE by ID
+ */
 export const fetchCveById = async (id: string): Promise<CveData> => {
   return await apiGet<CveData>(ENDPOINTS.CVE_BY_ID(id));
 };
 
+/**
+ * Fetch CVE statistics
+ */
 export const fetchCveStats = async (): Promise<CveStats> => {
   return await apiGet<CveStats>(ENDPOINTS.CVE_STATS);
 };
 
 // --- FILTER OPTIONS ---
 
+/**
+ * Fetch available filter options
+ */
 export const fetchFilterOptions = async (): Promise<FilterOptionsResponse> => {
   return await apiGet<FilterOptionsResponse>(ENDPOINTS.FILTERS_OPTIONS);
 };
 
 // --- GLOBAL SEARCH ---
 
+/**
+ * Perform global search across all entities
+ */
 export const globalSearch = async (
   query: string,
   pagination?: PaginationParams,
@@ -357,35 +307,58 @@ export const globalSearch = async (
     params.limit = pagination.limit;
   }
   
-  if (types?.length) params.types = types.join(',');
+  if (types?.length) {
+    params.types = types.join(',');
+  }
   
   return await apiGet<GlobalSearchResponse>(ENDPOINTS.GLOBAL_SEARCH, params);
 };
 
-// --- ANALYTICS AND DASHBOARD ---
+// --- ANALYTICS ENDPOINTS ---
 
+/**
+ * Fetch dashboard analytics data
+ */
 export const fetchDashboardData = async (): Promise<DashboardStats> => {
   return await apiGet<DashboardStats>(ENDPOINTS.ANALYTICS_DASHBOARD);
 };
 
+/**
+ * Fetch trend data for analytics
+ */
 export const fetchTrendData = async (
   period?: string,
   startDate?: string,
   endDate?: string
-): Promise<TrendData> => {
+): Promise<TrendData[]> => {
   const params: Record<string, any> = {};
+  
   if (period) params.period = period;
   if (startDate) params.start_date = startDate;
   if (endDate) params.end_date = endDate;
   
-  return await apiGet<TrendData>(ENDPOINTS.ANALYTICS_TRENDS, params);
+  const response = await apiGet<{ trends: TrendData[] }>(ENDPOINTS.ANALYTICS_TRENDS, params);
+  return response.trends || [];
 };
 
 // --- ISSUE CREATION ---
 
+/**
+ * Create an issue for a rule
+ */
 export const createIssue = async (
-  ruleId: string,
   payload: CreateIssuePayload
 ): Promise<CreateIssueResponse> => {
-  return await apiPost<CreateIssueResponse>(`/rules/${ruleId}/issues`, payload);
+  const endpoint = `/rules/${payload.rule_id}/issues`;
+  const data = {
+    title: payload.title,
+    description: payload.description,
+    issueType: payload.issue_type,
+    priority: payload.priority,
+    affected_platforms: payload.affected_platforms,
+    suggested_fix: payload.suggested_fix,
+    contact_email: payload.contact_email
+  };
+  
+  return await apiPost<CreateIssueResponse>(endpoint, data);
 };
