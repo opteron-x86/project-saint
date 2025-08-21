@@ -1,5 +1,5 @@
 // src/api/endpoints.ts
-// Simplified version that works with the fixed backend API
+// Updated to handle the new backend response structure
 
 import { apiGet, apiPost } from './client';
 import {
@@ -74,9 +74,10 @@ const buildQueryParams = (
     }
     
     // Array filters - convert to comma-separated strings
+    // Removed validation_status from the list
     const arrayFilters = [
       'severity', 'platforms', 'techniques', 'tactics', 
-      'rule_source', 'tags', 'rule_platform', 'validation_status',
+      'rule_source', 'tags', 'rule_platform',
       'mitre_techniques', 'cve_ids'
     ];
     
@@ -106,26 +107,95 @@ const buildQueryParams = (
 
 /**
  * Fetch rules with pagination and filters
- * No transformation needed - backend now returns correct field names
+ * Transform backend response to match frontend expectations
  */
 export const fetchRules = async (
   pagination?: PaginationParams,
   filters?: RuleFilters
 ): Promise<FetchRulesResponse> => {
   const params = buildQueryParams(pagination, filters);
-  const response = await apiGet<FetchRulesResponse>(ENDPOINTS.RULES, params);
+  const response = await apiGet<any>(ENDPOINTS.RULES, params);
   
-  // Backend now returns the correct structure
-  // No transformation needed
-  return response;
+  // Backend returns 'items' array, transform to match frontend RuleSummary interface
+  const transformedRules = (response.items || []).map((item: any) => ({
+    id: item.id,
+    source_rule_id: item.rule_id,
+    title: item.name,  // Backend 'name' -> Frontend 'title'
+    description: item.description,
+    platforms: item.platforms || [],
+    rule_source: item.rule_source,
+    severity: item.severity,
+    status: item.is_active ? 'active' : 'inactive',
+    created_date: item.created_date,
+    modified_date: item.modified_date,
+    rule_platforms: item.platforms || [],
+    linked_technique_ids: item.mitre_techniques || [],
+    has_mitre_mapping: item.has_mitre || false,
+    has_cve_references: item.has_cves || false,
+    enrichment_score: item.enrichment_score,
+    tags: item.tags || []
+  }));
+  
+  return {
+    rules: transformedRules,
+    items: transformedRules,  // Duplicate for backward compatibility
+    total: response.total || 0,
+    offset: response.offset || 0,
+    limit: response.limit || params.limit || 25,
+    page: response.page || (pagination?.page ?? 1),
+    totalPages: response.totalPages || Math.ceil((response.total || 0) / (params.limit || 25))
+  };
 };
 
 /**
  * Fetch rule by ID
- * Direct pass-through as backend returns correct format
+ * Transform backend response to match frontend RuleDetail interface
  */
 export const fetchRuleById = async (id: string): Promise<RuleDetail> => {
-  return await apiGet<RuleDetail>(ENDPOINTS.RULE_BY_ID(id));
+  const response = await apiGet<any>(ENDPOINTS.RULE_BY_ID(id));
+  
+  // Transform mitre_techniques if they exist and are complex objects
+  const linkedTechniqueIds = response.mitre_techniques 
+    ? (typeof response.mitre_techniques[0] === 'string' 
+        ? response.mitre_techniques 
+        : response.mitre_techniques.map((t: any) => t.technique_id || t))
+    : [];
+  
+  return {
+    // Base fields matching RuleSummary
+    id: response.id,
+    source_rule_id: response.rule_id,
+    title: response.name,
+    description: response.description,
+    platforms: response.platforms || [],
+    rule_source: response.rule_source,
+    severity: response.severity,
+    status: response.is_active ? 'active' : 'inactive',
+    created_date: response.created_date,
+    modified_date: response.modified_date,
+    rule_platforms: response.platforms || [],
+    linked_technique_ids: linkedTechniqueIds,
+    has_mitre_mapping: response.has_mitre || linkedTechniqueIds.length > 0,
+    has_cve_references: response.has_cves || (response.cve_references?.length > 0),
+    enrichment_score: response.enrichment_score,
+    tags: response.tags || [],
+    
+    // Extended fields for RuleDetail
+    author: response.author,
+    source_file_path: response.source_file_path,
+    raw_rule: response.raw_rule,
+    linked_techniques: response.mitre_techniques || [],
+    elastic_details: response.elastic_details,
+    sentinel_details: response.sentinel_details,
+    trinitycyber_details: response.trinitycyber_details,
+    mitre_techniques: response.mitre_techniques,
+    cve_references: response.cve_references,
+    cves: response.cve_references,
+    related_rules: response.related_rules,
+    rule_metadata: response.rule_metadata,
+    rule_content: response.rule_content,
+    is_active: response.is_active
+  };
 };
 
 /**
@@ -164,12 +234,11 @@ export const exportRules = async (
 
 /**
  * Fetch MITRE ATT&CK matrix
- * Minimal transformation for consistency
  */
 export const fetchMitreMatrix = async (): Promise<MitreMatrixData> => {
   const response = await apiGet<any>(ENDPOINTS.MITRE_MATRIX);
   
-  // API returns data wrapped in 'matrix' field
+  // Handle wrapped or direct response
   const matrixData = response.matrix || response;
   
   // Ensure consistent ID field naming
@@ -220,51 +289,48 @@ export const fetchMitreTechniques = async (
     params.limit = pagination.limit;
   }
   
-  if (search) {
-    params.search = search;
-  }
+  if (search) params.query = search;
   
   const response = await apiGet<any>(ENDPOINTS.MITRE_TECHNIQUES, params);
   
-  // Ensure consistent technique ID field
-  const techniques = (response.techniques || response.items || []).map((tech: any) => ({
-    ...tech,
-    id: tech.technique_id || tech.id,
-    subtechniques: (tech.subtechniques || []).map((subtech: any) => ({
-      ...subtech,
-      id: subtech.technique_id || subtech.id,
-    }))
-  }));
-  
   return {
-    techniques,
-    total: response.total || techniques.length
+    techniques: response.items || response.techniques || [],
+    total: response.total || 0,
   };
 };
 
 // --- CVE ENDPOINTS ---
 
 /**
- * Fetch CVEs with pagination and filters
+ * Fetch CVEs with filters
  */
 export const fetchCves = async (
-  pagination?: PaginationParams,
+  pagination: PaginationParams,
   filters?: { severities?: string[]; with_rules_only?: boolean; query?: string }
 ): Promise<{ items: CveData[]; total: number }> => {
-  const params: Record<string, any> = {};
+  const params: Record<string, any> = {
+    offset: (pagination.page - 1) * pagination.limit,
+    limit: pagination.limit,
+  };
   
-  if (pagination) {
-    params.offset = (pagination.page - 1) * pagination.limit;
-    params.limit = pagination.limit;
+  if (filters?.severities?.length) {
+    params.severities = filters.severities.join(',');
   }
   
-  if (filters) {
-    if (filters.severities?.length) params.severities = filters.severities.join(',');
-    if (filters.with_rules_only !== undefined) params.with_rules_only = filters.with_rules_only;
-    if (filters.query) params.query = filters.query;
+  if (filters?.with_rules_only) {
+    params.with_rules_only = 'true';
   }
   
-  return await apiGet<{ items: CveData[]; total: number }>(ENDPOINTS.CVES, params);
+  if (filters?.query) {
+    params.query = filters.query;
+  }
+  
+  const response = await apiGet<any>(ENDPOINTS.CVES, params);
+  
+  return {
+    items: response.items || response.cves || [],
+    total: response.total || 0,
+  };
 };
 
 /**
@@ -281,19 +347,17 @@ export const fetchCveStats = async (): Promise<CveStats> => {
   return await apiGet<CveStats>(ENDPOINTS.CVE_STATS);
 };
 
-// --- FILTER OPTIONS ---
+// --- FILTER AND SEARCH ENDPOINTS ---
 
 /**
- * Fetch available filter options
+ * Fetch filter options
  */
 export const fetchFilterOptions = async (): Promise<FilterOptionsResponse> => {
   return await apiGet<FilterOptionsResponse>(ENDPOINTS.FILTERS_OPTIONS);
 };
 
-// --- GLOBAL SEARCH ---
-
 /**
- * Perform global search across all entities
+ * Global search across entities
  */
 export const globalSearch = async (
   query: string,

@@ -16,7 +16,6 @@ export interface TechniqueBase {
   is_subtechnique: boolean;
 }
 
-// Extended PaginationParams with sorting fields
 export interface PaginationParams {
   page: number;
   limit: number;
@@ -25,9 +24,9 @@ export interface PaginationParams {
   include_facets?: boolean;
 }
 
-// --- Enhanced MITRE ATT&CK Data Structures ---
+// --- MITRE ATT&CK Data Structures ---
 export interface MitreTechnique {
-  id: string;                           // This will be the technique_id (e.g., "T1059")
+  id: string; 
   name: string;
   description?: string | null;
   url?: string | null;
@@ -36,30 +35,30 @@ export interface MitreTechnique {
   stix_id?: string | null;
   platforms: string[];
   data_sources?: string[];
-  subtechniques: MitreTechnique[];      // Nested subtechniques
+  subtechniques: MitreTechnique[]; 
   rule_count?: number;
   coverage_percentage?: number;
   // Additional fields that may come from API
   parent_technique_id?: string | null;
-  tactics?: string[];                   // Associated tactics
+  tactics?: string[]; 
 }
 
 export interface MitreTactic {
-  id: string;                           // This will be the tactic_id (e.g., "TA0001")
-  tactic_id?: string;                   // Keep original tactic_id for reference
+  id: string;
+  tactic_id?: string; 
   stix_id?: string | null;
   name: string;
   shortname?: string | null;
   description?: string | null;
   url?: string | null;
   matrix_order?: number | null;
-  techniques: MitreTechnique[];         // Top-level techniques only
+  techniques: MitreTechnique[];
   rule_count?: number;
 }
 
 export type MitreMatrixData = MitreTactic[];
 
-// --- Enhanced CVE Data Structures ---
+// --- CVE Data Structures ---
 export interface CveData {
   id: string;
   cve_id: string;
@@ -80,7 +79,7 @@ export interface CveStats {
   recent_cves: CveData[];
 }
 
-// --- Enhanced Source-Specific Rule Detail Types ---
+// --- Source-Specific Rule Detail Types ---
 export interface ElasticDetails {
   query: string;
   language?: string | null;
@@ -143,7 +142,6 @@ export interface RuleSummary {
   tags?: string[] | null;
 }
 
-// FIX 2: Extended RuleDetail with additional properties and index signature
 export interface RuleDetail extends RuleSummary {
   author?: string | null;
   source_file_path?: string | null;
@@ -154,16 +152,15 @@ export interface RuleDetail extends RuleSummary {
   trinitycyber_details?: TrinityCyberDetails | null;
   mitre_techniques?: MitreTechnique[] | null;
   cve_references?: CveData[] | null;
-  cves?: CveData[] | null; // Added for compatibility
+  cves?: CveData[] | null; 
   related_rules?: RuleSummary[] | null;
   rule_metadata?: Record<string, unknown> | null;
   rule_content?: string | null;
   is_active?: boolean;
-  validation_status?: string;
-  [key: string]: any; // Index signature for type casting
+  [key: string]: any; 
 }
 
-// --- API Response Types (Matching Lambda format) ---
+// --- API Response Types ---
 export interface FetchRulesResponse {
   rules: RuleSummary[];
   items?: RuleSummary[];
@@ -189,14 +186,13 @@ export interface TechniqueRuleInfo {
   platforms: string[];
   rule_source?: string;
   enrichment_score?: number;
-  // Additional fields from API
   tags?: string[];
   created_date?: string | null;
   modified_date?: string | null;
 }
 
 export interface TechniqueCoverageDetail {
-  technique_id: string;                 // Should match MitreTechnique.id
+  technique_id: string;                 
   name: string;
   count: number;
   rules: TechniqueRuleInfo[];
@@ -263,7 +259,6 @@ export interface FilterOptionsResponse {
   severities: FilterOption[];
   tactics: FilterOption[];
   rule_platforms: FilterOption[];
-  validation_statuses: FilterOption[];
   mitre_techniques: FilterOption[];
   cve_severities: FilterOption[];
   enrichment_levels: FilterOption[];
@@ -281,23 +276,20 @@ export interface RuleFilters {
   tags?: string[];
   dateRange?: { start?: string; end?: string; } | null;
   rule_platform?: string[];
-  validation_status?: string[];
   mitre_techniques?: string[];
   cve_ids?: string[];
   has_mitre?: boolean;
   has_cves?: boolean;
   is_active?: boolean;
-  // Added enrichment filter fields
   has_mitre_mapping?: boolean;
   has_cve_references?: boolean;
   enrichment_score_min?: number;
 }
 
 // --- Export Options ---
-// FIX 4: Corrected ExportOptions interface
 export interface ExportOptions {
   format: 'json' | 'csv' | 'yaml';
-  include_enrichments?: boolean; // Changed from include_enrichment_data
+  include_enrichments?: boolean;
   include_raw_content?: boolean;
   filters?: RuleFilters;
 }
@@ -379,7 +371,7 @@ export interface CreateIssuePayload {
 
 export interface CreateIssueResponse {
   issue_id?: string;
-  issue_url?: string;  // Added this field that backend returns
+  issue_url?: string; 
   status?: 'created' | 'pending' | 'failed';
   message?: string;
   tracking_url?: string;

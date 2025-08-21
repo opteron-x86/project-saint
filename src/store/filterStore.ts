@@ -15,8 +15,6 @@ interface FilterState {
   ruleSourceOptions: FilterOption[];
   severityOptions: FilterOption[];
   rulePlatformOptions: FilterOption[];
-  // --- FIX APPLIED HERE ---
-  validationStatusOptions: FilterOption[];
 
   // Loading/error state for fetching options
   isLoadingOptions: boolean;
@@ -29,8 +27,6 @@ interface FilterState {
   setTactics: (tactics: string[]) => void;
   setRuleSources: (sources: string[]) => void;
   setRulePlatforms: (platforms: string[]) => void;
-  // --- FIX APPLIED HERE ---
-  setValidationStatus: (statuses: string[]) => void;
 
   clearFilters: () => void;
   fetchAllFilterOptions: () => Promise<void>;
@@ -47,8 +43,6 @@ const initialFilters: RuleFilters = {
   tags: [],
   dateRange: null,
   rule_platform: [],
-  // --- FIX APPLIED HERE ---
-  validation_status: [],
 };
 
 export const useFilterStore = create<FilterState>()(
@@ -61,7 +55,6 @@ export const useFilterStore = create<FilterState>()(
       ruleSourceOptions: [],
       severityOptions: [],
       rulePlatformOptions: [],
-      validationStatusOptions: [], // Initialize new options state
 
       isLoadingOptions: false,
       optionsError: null,
@@ -72,7 +65,6 @@ export const useFilterStore = create<FilterState>()(
       setTactics: (tactics) => set((state) => ({ filters: { ...state.filters, tactics } })),
       setRuleSources: (rule_source) => set((state) => ({ filters: { ...state.filters, rule_source } })),
       setRulePlatforms: (rule_platform) => set((state) => ({ filters: { ...state.filters, rule_platform } })),
-      setValidationStatus: (validation_status) => set((state) => ({ filters: { ...state.filters, validation_status } })),
       
       clearFilters: () => set({ filters: { ...initialFilters } }),
 
@@ -87,7 +79,6 @@ export const useFilterStore = create<FilterState>()(
             ruleSourceOptions: response.rule_sources || [],
             severityOptions: response.severities || [],
             rulePlatformOptions: response.rule_platforms || [],
-            validationStatusOptions: response.validation_statuses || [], // Store validation status options
             isLoadingOptions: false,
           });
         } catch (error) {
@@ -111,7 +102,6 @@ export const useRulePlatformOptions = () => useFilterStore((state) => state.rule
 export const useTacticOptions = () => useFilterStore((state) => state.tacticOptions);
 export const useRuleSourceOptions = () => useFilterStore((state) => state.ruleSourceOptions);
 export const useSeverityOptions = () => useFilterStore((state) => state.severityOptions);
-export const useValidationStatusOptions = () => useFilterStore((state) => state.validationStatusOptions);
 export const useIsLoadingOptions = () => useFilterStore((state) => state.isLoadingOptions);
 export const useOptionsError = () => useFilterStore((state) => state.optionsError);
 

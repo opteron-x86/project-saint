@@ -27,7 +27,6 @@ import TuneIcon from '@mui/icons-material/Tune';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import LanguageIcon from '@mui/icons-material/Language';
 import DnsIcon from '@mui/icons-material/Dns';
-import VerifiedUserIcon from '@mui/icons-material/VerifiedUser'; // New icon for validation
 
 import { RuleFilters, RuleSeverity, FilterOption } from '../../api/types';
 import { SearchBar, FilterChip, ErrorDisplay } from '../common';
@@ -39,7 +38,6 @@ import {
   useTacticOptions,
   useRuleSourceOptions,
   useSeverityOptions,
-  useValidationStatusOptions, // Import new selector
   useIsLoadingOptions,
   useOptionsError,
 } from '../../store/filterStore';
@@ -56,7 +54,6 @@ const RuleFilterBar: React.FC = () => {
     setTactics,
     setRuleSources,
     setRulePlatforms,
-    setValidationStatus, // Import new action
     clearFilters,
     fetchAllFilterOptions,
   } = useFilterStore();
@@ -66,7 +63,6 @@ const RuleFilterBar: React.FC = () => {
   const tacticOptions = useTacticOptions();
   const ruleSourceOptions = useRuleSourceOptions();
   const severityOptions = useSeverityOptions();
-  const validationStatusOptions = useValidationStatusOptions(); // Use new selector
   const isLoadingOptions = useIsLoadingOptions();
   const optionsError = useOptionsError();
 
@@ -83,8 +79,6 @@ const RuleFilterBar: React.FC = () => {
   const [ruleSourceAnchorEl, setRuleSourceAnchorEl] = useState<HTMLElement | null>(null);
   const [tacticsAnchorEl, setTacticsAnchorEl] = useState<HTMLElement | null>(null);
   const [moreMenuAnchorEl, setMoreMenuAnchorEl] = useState<HTMLElement | null>(null);
-  // --- FIX APPLIED HERE ---
-  const [validationStatusAnchorEl, setValidationStatusAnchorEl] = useState<HTMLElement | null>(null);
 
   const handleSearchChange = useCallback((value: string) => {
     setSearchTerm(value || undefined);
@@ -130,15 +124,6 @@ const RuleFilterBar: React.FC = () => {
     setTactics(newTactics);
   }, [filters.tactics, setTactics]);
 
-  // --- FIX APPLIED HERE ---
-  const handleValidationStatusChange = useCallback((statusValue: string) => {
-    const currentStatuses = filters.validation_status || [];
-    const newStatuses = currentStatuses.includes(statusValue)
-      ? currentStatuses.filter((s) => s !== statusValue)
-      : [...currentStatuses, statusValue];
-    setValidationStatus(newStatuses);
-  }, [filters.validation_status, setValidationStatus]);
-
   const handleRemoveFilter = useCallback((type: keyof RuleFilters, valueToRemove: string) => {
     switch (type) {
       case 'severity': setSeverities((filters.severity || []).filter((s) => s !== valueToRemove)); break;
@@ -146,11 +131,10 @@ const RuleFilterBar: React.FC = () => {
       case 'rule_platform': setRulePlatforms((filters.rule_platform || []).filter((p) => p !== valueToRemove)); break;
       case 'rule_source': setRuleSources((filters.rule_source || []).filter((s) => s !== valueToRemove)); break;
       case 'tactics': setTactics((filters.tactics || []).filter((t) => t !== valueToRemove)); break;
-      case 'validation_status': setValidationStatus((filters.validation_status || []).filter((s) => s !== valueToRemove)); break; // Handle remove
       case 'search': setSearchTerm(undefined); break;
       default: break;
     }
-  }, [filters, setSeverities, setPlatforms, setRulePlatforms, setRuleSources, setTactics, setSearchTerm, setValidationStatus]);
+  }, [filters, setSeverities, setPlatforms, setRulePlatforms, setRuleSources, setTactics, setSearchTerm]);
 
   const hasActiveFilters = useMemo(() =>
     (filters.search && filters.search.length > 0) ||
@@ -159,7 +143,6 @@ const RuleFilterBar: React.FC = () => {
     (filters.rule_platform && filters.rule_platform.length > 0) ||
     (filters.rule_source && filters.rule_source.length > 0) ||
     (filters.tactics && filters.tactics.length > 0) ||
-    (filters.validation_status && filters.validation_status.length > 0), // Check new filter
     [filters]
   );
 
@@ -168,7 +151,6 @@ const RuleFilterBar: React.FC = () => {
   const rulePlatformPopoverId = rulePlatformAnchorEl ? 'rule-platform-popover' : undefined;
   const ruleSourcePopoverId = ruleSourceAnchorEl ? 'rule-source-popover' : undefined;
   const tacticsPopoverId = tacticsAnchorEl ? 'tactics-popover' : undefined;
-  const validationStatusPopoverId = validationStatusAnchorEl ? 'validation-status-popover' : undefined; // New popover ID
   const moreMenuId = moreMenuAnchorEl ? 'more-menu' : undefined;
 
   const renderFilterChips = () => {
@@ -194,11 +176,6 @@ const RuleFilterBar: React.FC = () => {
     filters.tactics?.forEach((t) => {
       const tacticLabel = tacticOptions.find(opt => opt.value === t)?.label || t;
       activeFilterChips.push(<FilterChip key={`tac-${t}`} label={tacticLabel} category="Tactic" onClear={() => handleRemoveFilter('tactics', t)} />);
-    });
-    // --- FIX APPLIED HERE ---
-    filters.validation_status?.forEach((vs) => {
-      const statusLabel = validationStatusOptions.find(opt => opt.value === vs)?.label || vs;
-      activeFilterChips.push(<FilterChip key={`val-${vs}`} label={statusLabel} category="Validation" onClear={() => handleRemoveFilter('validation_status', vs)} customColor={theme.palette.success.dark} />);
     });
     return activeFilterChips;
   };
@@ -253,8 +230,6 @@ const RuleFilterBar: React.FC = () => {
           {!isMobile && (
             <>
               <Button variant="outlined" size="small" startIcon={<TuneIcon />} onClick={(e) => setSeverityAnchorEl(e.currentTarget)} color={filters.severity && filters.severity.length > 0 ? 'primary' : 'inherit'}>Severity</Button>
-              {/* --- FIX APPLIED HERE --- */}
-              <Button variant="outlined" size="small" startIcon={<VerifiedUserIcon />} onClick={(e) => setValidationStatusAnchorEl(e.currentTarget)} color={filters.validation_status && filters.validation_status.length > 0 ? 'primary' : 'inherit'}>Validation</Button>
               <Button variant="outlined" size="small" startIcon={<DnsIcon />} onClick={(e) => setAttackPlatformAnchorEl(e.currentTarget)} color={filters.platforms && filters.platforms.length > 0 ? 'primary' : 'inherit'}>ATT&CK Platform</Button>
               <Button variant="outlined" size="small" startIcon={<LanguageIcon />} onClick={(e) => setRulePlatformAnchorEl(e.currentTarget)} color={filters.rule_platform && filters.rule_platform.length > 0 ? 'secondary' : 'inherit'}>Rule Platform</Button>
             </>
@@ -280,7 +255,6 @@ const RuleFilterBar: React.FC = () => {
       <Popover id={severityPopoverId} open={Boolean(severityAnchorEl)} anchorEl={severityAnchorEl} onClose={() => setSeverityAnchorEl(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }} PaperProps={{ sx: { width: 280 } }}>{renderCheckboxList(severityOptions, filters.severity, handleSeverityChange, "Filter by Severity", isLoadingOptions, optionsError)}</Popover>
       <Popover id={attackPlatformPopoverId} open={Boolean(attackPlatformAnchorEl)} anchorEl={attackPlatformAnchorEl} onClose={() => setAttackPlatformAnchorEl(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }} PaperProps={{ sx: { width: 280 } }}>{renderCheckboxList(attackPlatformOptions, filters.platforms, handleAttackPlatformChange, "Filter by ATT&CK Platform", isLoadingOptions, optionsError)}</Popover>
       <Popover id={rulePlatformPopoverId} open={Boolean(rulePlatformAnchorEl)} anchorEl={rulePlatformAnchorEl} onClose={() => setRulePlatformAnchorEl(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }} PaperProps={{ sx: { width: 280 } }}>{renderCheckboxList(rulePlatformFilterOptions, filters.rule_platform, handleRulePlatformChange, "Filter by Rule Platform", isLoadingOptions, optionsError)}</Popover>
-      <Popover id={validationStatusPopoverId} open={Boolean(validationStatusAnchorEl)} anchorEl={validationStatusAnchorEl} onClose={() => setValidationStatusAnchorEl(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }} PaperProps={{ sx: { width: 280 } }}>{renderCheckboxList(validationStatusOptions, filters.validation_status, handleValidationStatusChange, "Filter by Validation Status", isLoadingOptions, optionsError)}</Popover>
       <Popover id={tacticsPopoverId} open={Boolean(tacticsAnchorEl)} anchorEl={tacticsAnchorEl} onClose={() => setTacticsAnchorEl(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} PaperProps={{ sx: { width: 320 } }}>{renderCheckboxList(tacticOptions, filters.tactics, handleTacticChange, "Filter by MITRE ATT&CK Tactic", isLoadingOptions, optionsError)}</Popover>
       <Popover id={ruleSourcePopoverId} open={Boolean(ruleSourceAnchorEl)} anchorEl={ruleSourceAnchorEl} onClose={() => setRuleSourceAnchorEl(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} PaperProps={{ sx: { width: 280 } }}>{renderCheckboxList(ruleSourceOptions, filters.rule_source, handleRuleSourceChange, "Filter by Source", isLoadingOptions, optionsError)}</Popover>
 
@@ -288,7 +262,7 @@ const RuleFilterBar: React.FC = () => {
       <Menu id={moreMenuId} anchorEl={moreMenuAnchorEl} open={Boolean(moreMenuAnchorEl)} onClose={() => setMoreMenuAnchorEl(null)} MenuListProps={{ dense: true }}>
         <MenuItem onClick={(e) => { setMoreMenuAnchorEl(null); setTacticsAnchorEl(e.currentTarget as HTMLElement); }}>MITRE ATT&CK Tactics</MenuItem>
         <MenuItem onClick={(e) => { setMoreMenuAnchorEl(null); setRuleSourceAnchorEl(e.currentTarget as HTMLElement); }}>Rule Source</MenuItem>
-        {isMobile && (<><Divider /><MenuItem onClick={(e) => { setMoreMenuAnchorEl(null); setSeverityAnchorEl(e.currentTarget as HTMLElement); }}>Severity</MenuItem><MenuItem onClick={(e) => { setMoreMenuAnchorEl(null); setValidationStatusAnchorEl(e.currentTarget as HTMLElement); }}>Validation</MenuItem><MenuItem onClick={(e) => { setMoreMenuAnchorEl(null); setAttackPlatformAnchorEl(e.currentTarget as HTMLElement); }}>ATT&CK Platform</MenuItem><MenuItem onClick={(e) => { setMoreMenuAnchorEl(null); setRulePlatformAnchorEl(e.currentTarget as HTMLElement); }}>Rule Platform</MenuItem></>)}
+        {isMobile && (<><Divider /><MenuItem onClick={(e) => { setMoreMenuAnchorEl(null); setSeverityAnchorEl(e.currentTarget as HTMLElement); }}>Severity</MenuItem><MenuItem onClick={(e) => { setMoreMenuAnchorEl(null); setAttackPlatformAnchorEl(e.currentTarget as HTMLElement); }}>ATT&CK Platform</MenuItem><MenuItem onClick={(e) => { setMoreMenuAnchorEl(null); setRulePlatformAnchorEl(e.currentTarget as HTMLElement); }}>Rule Platform</MenuItem></>)}
       </Menu>
 
       {/* Mobile Filter Drawer */}
@@ -296,8 +270,6 @@ const RuleFilterBar: React.FC = () => {
         <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${theme.palette.divider}` }}><Typography variant="h6">Filters</Typography><IconButton onClick={() => setFilterDrawerOpen(false)}><CloseIcon /></IconButton></Box>
         <Box sx={{p:0, flexGrow:1, overflowY:'auto'}}>
           {renderCheckboxList(severityOptions, filters.severity, handleSeverityChange, "Severity", isLoadingOptions, optionsError)}
-          <Divider />
-          {renderCheckboxList(validationStatusOptions, filters.validation_status, handleValidationStatusChange, "Validation Status", isLoadingOptions, optionsError)}
           <Divider />
           {renderCheckboxList(attackPlatformOptions, filters.platforms, handleAttackPlatformChange, "ATT&CK Platform", isLoadingOptions, optionsError)}
           <Divider />
