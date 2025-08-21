@@ -1,12 +1,11 @@
 // src/components/rules/RulesTable.tsx
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
   DataGrid,
   GridColDef,
   GridRowParams,
   GridSortModel,
-  GridColumnHeaderParams,
-  GridRenderCellParams,
+  GridPaginationModel,
 } from '@mui/x-data-grid';
 import {
   Box,
@@ -26,49 +25,44 @@ import { formatDate } from '@/utils/format';
 
 interface RulesTableProps {
   rules: RuleSummary[];
-  isLoading?: boolean;
-  page: number;
+  totalRules: number;
+  currentPage: number;
   pageSize: number;
-  totalCount: number;
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (pageSize: number) => void;
-  onRowClick?: (rule: RuleSummary) => void;
+  sortModel?: GridSortModel;
+  isLoading?: boolean;
+  onRuleSelect: (rule: RuleSummary) => void;
+  onPaginationChange: (page: number, pageSize?: number) => void;
+  onSortChange?: (model: GridSortModel) => void;
   onBookmark?: (ruleId: string) => void;
   bookmarkedRuleIds?: Set<string>;
-  sortModel?: GridSortModel;
-  onSortModelChange?: (model: GridSortModel) => void;
   columns?: GridColDef<RuleSummary>[];
 }
 
 const RulesTable: React.FC<RulesTableProps> = ({
   rules,
-  isLoading = false,
-  page,
+  totalRules,
+  currentPage,
   pageSize,
-  totalCount,
-  onPageChange,
-  onPageSizeChange,
-  onRowClick,
+  sortModel,
+  isLoading = false,
+  onRuleSelect,
+  onPaginationChange,
+  onSortChange,
   onBookmark,
   bookmarkedRuleIds = new Set(),
-  sortModel,
-  onSortModelChange,
   columns: externalColumns,
 }) => {
   const theme = useTheme();
 
-  // Map rules to include proper fields based on API response
+  // Process rules to ensure consistent data structure
   const processedRules = useMemo(
     () =>
       rules.map((r) => ({
         ...r,
-        id: r.id || r.rule_id,
-        title: r.name || r.title,
+        // Ensure id is always present for DataGrid
+        id: r.id,
+        // Map any legacy fields if needed
         severity: r.severity || 'unknown',
-        rule_source: r.source?.name || 'Unknown',
-        source_id: r.source?.id,
-        // API doesn't return these fields, so we'll handle them gracefully
-        created_date: r.created_date || null,
         platforms: r.platforms || [],
       })),
     [rules]
@@ -83,7 +77,7 @@ const RulesTable: React.FC<RulesTableProps> = ({
       sortable: true,
       renderCell: ({ row }) => (
         <Typography variant="body2" fontWeight={500} noWrap>
-          {row.title || row.name}
+          {row.title}
         </Typography>
       ),
     },
@@ -101,106 +95,144 @@ const RulesTable: React.FC<RulesTableProps> = ({
       ),
     },
     {
-      field: 'rule_type',
-      headerName: 'Type',
-      width: 140,
-      sortable: true,
-      renderCell: ({ value }) =>
-        value ? (
-          <Chip label={value.toUpperCase()} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
-        ) : (
-          '-'
-        ),
-    },
-    {
       field: 'rule_source',
       headerName: 'Source',
-      width: 150,
-      sortable: false, // Backend doesn't support sorting by source name
+      width: 140,
+      sortable: true,
+      renderCell: ({ row }) => (
+        <Typography variant="body2" noWrap>
+          {row.rule_source}
+        </Typography>
+      ),
+    },
+    {
+      field: 'platforms',
+      headerName: 'Platforms',
+      width: 180,
+      sortable: false,
+      renderCell: ({ row }) => (
+        <Stack direction="row" spacing={0.5}>
+          {(row.platforms || []).slice(0, 2).map((platform) => (
+            <Chip key={platform} label={platform} size="small" variant="outlined" />
+          ))}
+          {(row.platforms || []).length > 2 && (
+            <Chip label={`+${(row.platforms || []).length - 2}`} size="small" variant="outlined" />
+          )}
+        </Stack>
+      ),
+    },
+    {
+      field: 'modified_date',
+      headerName: 'Last Modified',
+      width: 140,
+      sortable: true,
+      renderCell: ({ row }) => (
+        <Typography variant="body2" noWrap>
+          {row.modified_date ? formatDate(row.modified_date) : '-'}
+        </Typography>
+      ),
+    },
+    {
+      field: 'has_mitre_mapping',
+      headerName: 'MITRE',
+      width: 80,
+      sortable: true,
+      align: 'center',
+      headerAlign: 'center',
       renderCell: ({ row }) => (
         <Chip
-          label={row.rule_source || 'Unknown'}
+          label={row.has_mitre_mapping ? 'Yes' : 'No'}
           size="small"
-          sx={{ height: 20, fontSize: '0.7rem' }}
+          color={row.has_mitre_mapping ? 'success' : 'default'}
+          variant={row.has_mitre_mapping ? 'filled' : 'outlined'}
         />
       ),
     },
     {
-      field: 'updated_date',
-      headerName: 'Last Updated',
-      width: 130,
+      field: 'has_cve_references',
+      headerName: 'CVEs',
+      width: 80,
       sortable: true,
-      renderCell: ({ row }) => (row.updated_date ? formatDate(row.updated_date) : '-'),
+      align: 'center',
+      headerAlign: 'center',
+      renderCell: ({ row }) => (
+        <Chip
+          label={row.has_cve_references ? 'Yes' : 'No'}
+          size="small"
+          color={row.has_cve_references ? 'warning' : 'default'}
+          variant={row.has_cve_references ? 'filled' : 'outlined'}
+        />
+      ),
     },
     {
       field: 'actions',
       headerName: 'Actions',
       width: 80,
       sortable: false,
-      disableColumnMenu: true,
+      align: 'center',
+      headerAlign: 'center',
       renderCell: ({ row }) => (
-        <Stack direction="row" spacing={0.5}>
-          {onBookmark && (
-            <Tooltip title={bookmarkedRuleIds.has(String(row.id)) ? 'Remove bookmark' : 'Add bookmark'}>
-              <IconButton
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onBookmark(String(row.id));
-                }}
-              >
-                {bookmarkedRuleIds.has(String(row.id)) ? (
-                  <BookmarkIcon fontSize="small" color="primary" />
-                ) : (
-                  <BookmarkBorderIcon fontSize="small" />
-                )}
-              </IconButton>
-            </Tooltip>
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            onBookmark?.(row.id);
+          }}
+        >
+          {bookmarkedRuleIds.has(row.id) ? (
+            <BookmarkIcon fontSize="small" color="primary" />
+          ) : (
+            <BookmarkBorderIcon fontSize="small" />
           )}
-        </Stack>
+        </IconButton>
       ),
     },
   ];
 
-  const columnsToUse = externalColumns ?? defaultColumnsInternal;
+  const columns = externalColumns || defaultColumnsInternal;
 
-  // Handle sorting changes
-  const handleSortModelChange = useCallback(
-    (model: GridSortModel) => {
-      if (onSortModelChange) {
-        onSortModelChange(model);
+  const handleRowClick = useCallback(
+    (params: GridRowParams<RuleSummary>) => {
+      if (onRuleSelect) {
+        onRuleSelect(params.row);
       }
     },
-    [onSortModelChange]
+    [onRuleSelect]
+  );
+
+  // Handle pagination model change
+  const handlePaginationModelChange = useCallback(
+    (model: GridPaginationModel) => {
+      if (model.page !== currentPage) {
+        onPaginationChange(model.page, model.pageSize);
+      } else if (model.pageSize !== pageSize) {
+        onPaginationChange(currentPage, model.pageSize);
+      }
+    },
+    [currentPage, pageSize, onPaginationChange]
   );
 
   return (
-    <Box sx={{ height: '100%', width: '100%' }}>
+    <Box sx={{ width: '100%', height: '100%' }}>
       <DataGrid
         rows={processedRules}
-        columns={columnsToUse}
+        columns={columns}
         loading={isLoading}
-        page={page - 1} // DataGrid uses 0-based indexing
-        pageSize={pageSize}
-        rowCount={totalCount}
-        paginationMode="server"
-        sortingMode="server"
-        onPageChange={(newPage) => onPageChange(newPage + 1)}
-        onPageSizeChange={onPageSizeChange}
+        rowCount={totalRules}
         pageSizeOptions={[10, 25, 50, 100]}
-        onRowClick={(params: GridRowParams<RuleSummary>) => onRowClick?.(params.row)}
+        paginationMode="server"
+        paginationModel={{ page: currentPage, pageSize }}
+        onPaginationModelChange={handlePaginationModelChange}
+        sortingMode="server"
         sortModel={sortModel}
-        onSortModelChange={handleSortModelChange}
+        onSortModelChange={onSortChange}
+        onRowClick={handleRowClick}
         disableRowSelectionOnClick
-        disableColumnFilter
+        disableColumnMenu
         autoHeight={false}
-        density="comfortable"
         sx={{
-          '& .MuiDataGrid-row': {
-            cursor: 'pointer',
-            '&:hover': {
-              backgroundColor: theme.palette.action.hover,
-            },
+          '& .MuiDataGrid-root': {
+            border: 'none',
           },
           '& .MuiDataGrid-cell': {
             borderBottom: `1px solid ${theme.palette.divider}`,
@@ -208,6 +240,15 @@ const RulesTable: React.FC<RulesTableProps> = ({
           '& .MuiDataGrid-columnHeaders': {
             backgroundColor: theme.palette.background.default,
             borderBottom: `2px solid ${theme.palette.divider}`,
+          },
+          '& .MuiDataGrid-footerContainer': {
+            borderTop: `2px solid ${theme.palette.divider}`,
+          },
+          '& .MuiDataGrid-row': {
+            cursor: 'pointer',
+            '&:hover': {
+              backgroundColor: theme.palette.action.hover,
+            },
           },
         }}
       />

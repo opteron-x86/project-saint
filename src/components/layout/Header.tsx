@@ -80,7 +80,7 @@ const Header: React.FC<HeaderProps> = ({
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexGrow: 1 }}>
         <Typography
-          variant="h6"
+          variant="h5"
           noWrap
           component="div"
           sx={{
@@ -99,8 +99,8 @@ const Header: React.FC<HeaderProps> = ({
         <ChevronRightIcon 
           sx={{ 
             color: 'text.disabled', 
-            fontSize: 20,
-            opacity: 0.4,
+            fontSize: 40,
+            opacity: 0.6,
           }} 
         />
         

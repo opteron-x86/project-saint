@@ -79,18 +79,19 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ open, onClos
     
     const payload: CreateIssuePayload = {
       rule_id: ruleId,
-      issue_type: issueType, // Fixed: Changed from issueType to issue_type
+      issue_type: issueType,
       title,
       description: markdownDescription,
       priority: priority as 'low' | 'medium' | 'high' | 'critical',
       contact_email: auth.user?.profile.email || undefined,
     };
 
-    createIssueMutation.mutate({ ruleId, payload }, {
+    // Fixed: Pass payload directly, not wrapped in an object
+    createIssueMutation.mutate(payload, {
       onSuccess: (data) => {
         toast.success(`Issue created successfully!`);
-        if (data.tracking_url) {
-          window.open(data.tracking_url, '_blank'); // Fixed: Changed from issue_url to tracking_url
+        if (data.issue_url || data.tracking_url) {
+          window.open(data.issue_url || data.tracking_url, '_blank');
         }
         handleClose();
       },

@@ -212,7 +212,7 @@ export const useTechniqueCoverageQuery = (
 };
 
 export const useMitreTechniquesQuery = (
-  pagination: PaginationParams,
+  pagination?: PaginationParams,
   search?: string,
   options?: UseQueryOptions<{ techniques: MitreTechnique[]; total: number }, Error>
 ) => {
@@ -220,7 +220,7 @@ export const useMitreTechniquesQuery = (
     queryKey: queryKeys.mitreTechniques(pagination, search),
     queryFn: () => fetchMitreTechniques(pagination, search),
     placeholderData: keepPreviousData,
-    staleTime: 15 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
     ...options,
   });
 };
@@ -307,13 +307,14 @@ export const useDashboardDataQuery = (
   });
 };
 
+// FIX 1: Changed TrendData to TrendData[] to match the return type of fetchTrendData
 export const useTrendDataQuery = (
   period?: string,
   startDate?: string,
   endDate?: string,
-  options?: UseQueryOptions<TrendData, Error>
+  options?: UseQueryOptions<TrendData[], Error>
 ) => {
-  return useQuery<TrendData, Error>({
+  return useQuery<TrendData[], Error>({
     queryKey: queryKeys.trendData(period, startDate, endDate),
     queryFn: () => fetchTrendData(period, startDate, endDate),
     staleTime: 10 * 60 * 1000,
@@ -323,17 +324,21 @@ export const useTrendDataQuery = (
 
 // --- MUTATION HOOKS ---
 
+// FIX 2: Updated to match the createIssue function signature that only takes payload
 export const useCreateIssueMutation = (
-  options?: UseMutationOptions<CreateIssueResponse, Error, { ruleId: string; payload: CreateIssuePayload }>
+  options?: UseMutationOptions<CreateIssueResponse, Error, CreateIssuePayload>
 ) => {
   const queryClient = useQueryClient();
   
-  return useMutation<CreateIssueResponse, Error, { ruleId: string; payload: CreateIssuePayload }>({
-    mutationFn: ({ ruleId, payload }) => createIssue(ruleId, payload),
+  return useMutation<CreateIssueResponse, Error, CreateIssuePayload>({
+    mutationFn: (payload) => createIssue(payload),
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.ruleDetail(variables.ruleId),
-      });
+      // Invalidate the rule detail query for the affected rule
+      if (variables.rule_id) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.ruleDetail(variables.rule_id),
+        });
+      }
     },
     ...options,
   });
@@ -349,46 +354,4 @@ export const useExportRulesMutation = (
     mutationFn: exportRules,
     ...options,
   });
-};
-
-// --- UTILITY HOOKS ---
-
-export const useRefreshQueries = () => {
-  const queryClient = useQueryClient();
-  
-  return {
-    refreshRulesData: () => {
-      queryClient.invalidateQueries({ queryKey: ['rules'] });
-      queryClient.invalidateQueries({ queryKey: ['ruleStats'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboardData'] });
-      queryClient.invalidateQueries({ queryKey: ['techniquesCoverage'] });
-    },
-    refreshMitreData: () => {
-      queryClient.invalidateQueries({ queryKey: ['mitreMatrix'] });
-      queryClient.invalidateQueries({ queryKey: ['mitreTechniques'] });
-      queryClient.invalidateQueries({ queryKey: ['techniquesCoverage'] });
-    },
-    refreshAllData: () => queryClient.invalidateQueries(),
-  };
-};
-
-export const usePrefetchQueries = () => {
-  const queryClient = useQueryClient();
-  
-  return {
-    prefetchRuleDetail: (ruleId: string) => {
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.ruleDetail(ruleId),
-        queryFn: () => fetchRuleById(ruleId),
-        staleTime: 10 * 60 * 1000,
-      });
-    },
-    prefetchFilterOptions: () => {
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.filterOptions(),
-        queryFn: fetchFilterOptions,
-        staleTime: 15 * 60 * 1000,
-      });
-    },
-  };
 };
