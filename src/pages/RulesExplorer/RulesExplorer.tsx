@@ -52,6 +52,8 @@ import { ApiError } from '@/api/types';
 const LazyRuleDetail = lazy(() => import('@/components/rules/RuleDetail'));
 const LazyRuleCard = lazy(() => import('@/components/rules/RuleCard'));
 
+const HEADER_HEIGHT = 96;
+
 type ViewMode = 'table' | 'grid';
 
 const RulesExplorer: React.FC = () => {
@@ -495,6 +497,10 @@ const RulesExplorer: React.FC = () => {
             width: isMobile ? '100%' : '60%',
             maxWidth: '800px',
             minWidth: '400px',
+            // Fix: Position drawer below headers
+            top: HEADER_HEIGHT,
+            height: `calc(100% - ${HEADER_HEIGHT}px)`,
+            position: 'fixed',
           },
         }}
       >

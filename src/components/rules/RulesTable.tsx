@@ -1,75 +1,97 @@
-import React, { useEffect, useMemo } from 'react';
-import { Box, Typography, Chip, useTheme } from '@mui/material';
+// src/components/rules/RulesTable.tsx
+import React, { useMemo, useState, useCallback } from 'react';
 import {
   DataGrid,
   GridColDef,
   GridRowParams,
   GridSortModel,
+  GridColumnHeaderParams,
+  GridRenderCellParams,
 } from '@mui/x-data-grid';
-
+import {
+  Box,
+  Typography,
+  Chip,
+  useTheme,
+  Stack,
+  IconButton,
+  Tooltip,
+} from '@mui/material';
+import BookmarkIcon from '@mui/icons-material/Bookmark';
+import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import { RuleSummary, RuleSeverity } from '@/api/types';
 import { StatusBadge } from '@/components/common';
+import { SEVERITY_DISPLAY } from '@/utils/constants';
 import { formatDate } from '@/utils/format';
-import { SEVERITY_DISPLAY, PAGE_SIZES } from '@/utils/constants';
 
 interface RulesTableProps {
   rules: RuleSummary[];
-  totalRules: number;
-  currentPage: number;
+  isLoading?: boolean;
+  page: number;
   pageSize: number;
-  sortModel: GridSortModel;
-  isLoading: boolean;
-  onPaginationChange: (page: number, pageSize?: number) => void;
-  onSortChange: (model: GridSortModel) => void;
-  onRuleSelect: (rule: RuleSummary) => void;
+  totalCount: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  onRowClick?: (rule: RuleSummary) => void;
+  onBookmark?: (ruleId: string) => void;
+  bookmarkedRuleIds?: Set<string>;
+  sortModel?: GridSortModel;
+  onSortModelChange?: (model: GridSortModel) => void;
   columns?: GridColDef<RuleSummary>[];
 }
 
 const RulesTable: React.FC<RulesTableProps> = ({
   rules,
-  totalRules,
-  currentPage,
+  isLoading = false,
+  page,
   pageSize,
+  totalCount,
+  onPageChange,
+  onPageSizeChange,
+  onRowClick,
+  onBookmark,
+  bookmarkedRuleIds = new Set(),
   sortModel,
-  isLoading,
-  onPaginationChange,
-  onSortChange,
-  onRuleSelect,
+  onSortModelChange,
   columns: externalColumns,
 }) => {
   const theme = useTheme();
 
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.debug('RulesTable updated with:', { numRules: rules.length, totalRules, isLoading });
-    }
-  }, [rules, totalRules, isLoading]);
-
+  // Map rules to include proper fields based on API response
   const processedRules = useMemo(
     () =>
       rules.map((r) => ({
         ...r,
-        title: r.title ?? 'Untitled Rule',
-        severity: r.severity ?? 'unknown',
-        rule_source: r.rule_source ?? 'unknown',
-        created_date: r.created_date ?? '',
-        modified_date: r.modified_date ?? '',
-        platforms: r.platforms ?? [],
+        id: r.id || r.rule_id,
+        title: r.name || r.title,
+        severity: r.severity || 'unknown',
+        rule_source: r.source?.name || 'Unknown',
+        source_id: r.source?.id,
+        // API doesn't return these fields, so we'll handle them gracefully
+        created_date: r.created_date || null,
+        platforms: r.platforms || [],
       })),
     [rules]
   );
 
   const defaultColumnsInternal: GridColDef<RuleSummary>[] = [
     {
-      field: 'title', headerName: 'Title', flex: 1.5, minWidth: 200,
+      field: 'title',
+      headerName: 'Title',
+      flex: 1.5,
+      minWidth: 200,
+      sortable: true,
       renderCell: ({ row }) => (
         <Typography variant="body2" fontWeight={500} noWrap>
-          {row.title}
+          {row.title || row.name}
         </Typography>
       ),
     },
     {
-      field: 'severity', headerName: 'Severity', width: 120,
+      field: 'severity',
+      headerName: 'Severity',
+      width: 120,
+      sortable: true,
       renderCell: ({ row }) => (
         <StatusBadge
           label={SEVERITY_DISPLAY[row.severity as RuleSeverity] ?? row.severity}
@@ -79,59 +101,115 @@ const RulesTable: React.FC<RulesTableProps> = ({
       ),
     },
     {
-      field: 'platforms', headerName: 'Platforms', width: 160,
-      renderCell: ({ row }) => {
-        if (!row.platforms || row.platforms.length === 0) return '-';
-        const displayed = row.platforms.slice(0, 2);
-        const overflow = row.platforms.length - displayed.length;
-        return (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-            {displayed.map((item) => (<Chip key={item} label={item} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />))}
-            {overflow > 0 && (<Chip label={`+${overflow}`} size="small" sx={{ height: 20, fontSize: '0.7rem', bgcolor: theme.palette.grey[200], color: theme.palette.grey[700] }} />)}
-          </Box>
-        );
-      },
+      field: 'rule_type',
+      headerName: 'Type',
+      width: 140,
+      sortable: true,
+      renderCell: ({ value }) =>
+        value ? (
+          <Chip label={value.toUpperCase()} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+        ) : (
+          '-'
+        ),
     },
-    { field: 'rule_source', headerName: 'Source', width: 120, renderCell: ({ value }) => (<Chip label={value} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />) },
-    { field: 'created_date', headerName: 'Created', width: 130, renderCell: ({ row }) => (row.created_date ? formatDate(row.created_date) : '-') },
+    {
+      field: 'rule_source',
+      headerName: 'Source',
+      width: 150,
+      sortable: false, // Backend doesn't support sorting by source name
+      renderCell: ({ row }) => (
+        <Chip
+          label={row.rule_source || 'Unknown'}
+          size="small"
+          sx={{ height: 20, fontSize: '0.7rem' }}
+        />
+      ),
+    },
+    {
+      field: 'updated_date',
+      headerName: 'Last Updated',
+      width: 130,
+      sortable: true,
+      renderCell: ({ row }) => (row.updated_date ? formatDate(row.updated_date) : '-'),
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      width: 80,
+      sortable: false,
+      disableColumnMenu: true,
+      renderCell: ({ row }) => (
+        <Stack direction="row" spacing={0.5}>
+          {onBookmark && (
+            <Tooltip title={bookmarkedRuleIds.has(String(row.id)) ? 'Remove bookmark' : 'Add bookmark'}>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onBookmark(String(row.id));
+                }}
+              >
+                {bookmarkedRuleIds.has(String(row.id)) ? (
+                  <BookmarkIcon fontSize="small" color="primary" />
+                ) : (
+                  <BookmarkBorderIcon fontSize="small" />
+                )}
+              </IconButton>
+            </Tooltip>
+          )}
+        </Stack>
+      ),
+    },
   ];
 
   const columnsToUse = externalColumns ?? defaultColumnsInternal;
 
-  // Manually handle pagination model changes since the footer is hidden
-  useEffect(() => {
-    const handlePagination = () => {
-      // This is a workaround to keep DataGrid's internal state in sync
-      // It doesn't trigger a re-fetch if the values are the same
-      onPaginationChange(currentPage, pageSize);
-    };
-    handlePagination();
-  }, [currentPage, pageSize, onPaginationChange]);
-
+  // Handle sorting changes
+  const handleSortModelChange = useCallback(
+    (model: GridSortModel) => {
+      if (onSortModelChange) {
+        onSortModelChange(model);
+      }
+    },
+    [onSortModelChange]
+  );
 
   return (
-    <Box sx={{ width: '100%', height: '100%' }}>
-      <DataGrid<RuleSummary>
+    <Box sx={{ height: '100%', width: '100%' }}>
+      <DataGrid
         rows={processedRules}
         columns={columnsToUse}
         loading={isLoading}
-        rowCount={totalRules}
-        pageSizeOptions={PAGE_SIZES}
-        paginationModel={{ page: currentPage - 1, pageSize }}
+        page={page - 1} // DataGrid uses 0-based indexing
+        pageSize={pageSize}
+        rowCount={totalCount}
         paginationMode="server"
         sortingMode="server"
-        onSortModelChange={onSortChange}
+        onPageChange={(newPage) => onPageChange(newPage + 1)}
+        onPageSizeChange={onPageSizeChange}
+        pageSizeOptions={[10, 25, 50, 100]}
+        onRowClick={(params: GridRowParams<RuleSummary>) => onRowClick?.(params.row)}
         sortModel={sortModel}
-        getRowId={(row) => row.id}
-        onRowClick={(params: GridRowParams<RuleSummary>) => onRuleSelect(params.row)}
+        onSortModelChange={handleSortModelChange}
         disableRowSelectionOnClick
-        hideFooter // Hides the entire default footer
+        disableColumnFilter
+        autoHeight={false}
+        density="comfortable"
         sx={{
-          '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within': { outline: 'none' },
-          '& .MuiDataGrid-columnHeader': { backgroundColor: 'background.paper' },
-          border: 0,
+          '& .MuiDataGrid-row': {
+            cursor: 'pointer',
+            '&:hover': {
+              backgroundColor: theme.palette.action.hover,
+            },
+          },
+          '& .MuiDataGrid-cell': {
+            borderBottom: `1px solid ${theme.palette.divider}`,
+          },
+          '& .MuiDataGrid-columnHeaders': {
+            backgroundColor: theme.palette.background.default,
+            borderBottom: `2px solid ${theme.palette.divider}`,
+          },
         }}
-        localeText={{ noRowsLabel: 'No rules found' }}
       />
     </Box>
   );

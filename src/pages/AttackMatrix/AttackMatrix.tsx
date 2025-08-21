@@ -29,7 +29,6 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { Theme } from '@mui/material/styles';
 
-// Corrected imports using '@/' alias
 import { SearchBar, StatusBadge, EmptyState, LoadingIndicator, ErrorDisplay } from '@/components/common';
 import {
   useFilterStore,
@@ -54,6 +53,7 @@ import AutoSizer from 'react-virtualized-auto-sizer';
 const LazyRuleDetail = lazy(() => import('@/components/rules/RuleDetail'));
 
 // --- Constants ---
+const HEADER_HEIGHT = 96;
 const CELL_HEIGHT = 76;
 const SUBTECHNIQUE_CELL_HEIGHT = 60;
 const CELL_MIN_WIDTH = 200;
@@ -431,6 +431,9 @@ const AttackMatrix: React.FC = () => {
           sx: {
             width: isMobile ? '100%' : 500,
             bgcolor: 'background.paper',
+            top: HEADER_HEIGHT,
+            height: `calc(100% - ${HEADER_HEIGHT}px)`,
+            position: 'fixed',
           }
         }}
       >

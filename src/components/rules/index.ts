@@ -7,3 +7,4 @@ export { default as RuleTagsDisplay } from './RuleTagsDisplay';
 export { default as RulesTable } from './RulesTable';
 export { default as RuleStatusBar } from './RuleStatusBar';
 export { default as CreateIssueModal } from './CreateIssueModal';
+export { default as VirtualizedRuleGrid } from './VirtualizedRuleGrid';
