@@ -1,5 +1,4 @@
 // src/api/endpoints.ts
-// Updated to handle the new backend response structure
 
 import { apiGet, apiPost } from './client';
 import {
@@ -67,18 +66,24 @@ const buildQueryParams = (
     params.limit = pagination.limit;
   }
   
-  // Filters - Lambda expects comma-separated strings for arrays
+  // Filters
   if (filters) {
     if (filters.query || filters.search) {
       params.query = filters.query || filters.search;
     }
     
+    // Handle both rule_source and rule_sources for backward compatibility
+    if (filters.rule_sources && filters.rule_sources.length > 0) {
+      params.rule_sources = filters.rule_sources.join(',');
+    } else if (filters.rule_source && filters.rule_source.length > 0) {
+      params.rule_sources = filters.rule_source.join(','); // Map to plural
+    }
+    
     // Array filters - convert to comma-separated strings
-    // Removed validation_status from the list
     const arrayFilters = [
       'severity', 'platforms', 'techniques', 'tactics', 
-      'rule_source', 'tags', 'rule_platform',
-      'mitre_techniques', 'cve_ids'
+      'tags', 'rule_platform', 'mitre_techniques', 'cve_ids',
+      'siem_platforms', 'aors', 'data_sources', 'info_controls'
     ];
     
     arrayFilters.forEach(key => {
@@ -92,22 +97,89 @@ const buildQueryParams = (
     if (filters.has_mitre !== undefined) params.has_mitre = filters.has_mitre;
     if (filters.has_cves !== undefined) params.has_cves = filters.has_cves;
     if (filters.is_active !== undefined) params.is_active = filters.is_active;
+    if (filters.has_mitre_mapping !== undefined) params.has_mitre = filters.has_mitre_mapping;
+    if (filters.has_cve_references !== undefined) params.has_cves = filters.has_cve_references;
     
     // Date range
     if (filters.dateRange) {
       if (filters.dateRange.start) params.start_date = filters.dateRange.start;
       if (filters.dateRange.end) params.end_date = filters.dateRange.end;
     }
+    
+    // Enrichment score filter
+    if (filters.enrichment_score_min !== undefined) {
+      params.enrichment_score_min = filters.enrichment_score_min;
+    }
   }
   
   return params;
+};
+
+/**
+ * Transform raw API response to RuleDetail
+ */
+const transformRuleResponse = (response: any): RuleDetail => {
+  const linkedTechniqueIds = response.linked_technique_ids || 
+    (response.mitre_techniques && Array.isArray(response.mitre_techniques) 
+      ? (typeof response.mitre_techniques[0] === 'string' 
+        ? response.mitre_techniques 
+        : response.mitre_techniques.map((t: any) => t.technique_id || t))
+      : []);
+  
+  return {
+    // Base fields
+    id: response.id,
+    source_rule_id: response.rule_id || response.source_rule_id,
+    title: response.title || response.name,
+    description: response.description,
+    platforms: response.platforms || [],
+    rule_source: response.rule_source,
+    severity: response.severity || 'unknown',
+    status: response.status || (response.is_active ? 'active' : 'inactive'),
+    created_date: response.created_date,
+    modified_date: response.modified_date || response.updated_date,
+    rule_platforms: response.rule_platforms || response.platforms || [],
+    linked_technique_ids: linkedTechniqueIds,
+    has_mitre_mapping: response.has_mitre_mapping ?? (response.has_mitre || linkedTechniqueIds.length > 0),
+    has_cve_references: response.has_cve_references ?? (response.has_cves || (response.cve_references?.length > 0)),
+    enrichment_score: response.enrichment_score,
+    tags: response.tags || [],
+    
+    // Extended detail fields
+    author: response.author,
+    source_file_path: response.source_file_path,
+    raw_rule: response.raw_rule,
+    linked_techniques: response.linked_techniques || response.mitre_techniques || [],
+    elastic_details: response.elastic_details,
+    sentinel_details: response.sentinel_details,
+    trinitycyber_details: response.trinitycyber_details,
+    mitre_techniques: response.mitre_techniques,
+    cve_references: response.cve_references,
+    cves: response.cves || response.cve_references,
+    related_rules: response.related_rules,
+    rule_metadata: response.rule_metadata,
+    rule_content: response.rule_content,
+    is_active: response.is_active,
+    
+    // New metadata fields
+    siem_platform: response.siem_platform,
+    aor: response.aor,
+    source_org: response.source_org,
+    data_sources: response.data_sources,
+    info_controls: response.info_controls,
+    modified_by: response.modified_by,
+    hunt_id: response.hunt_id,
+    malware_family: response.malware_family,
+    intrusion_set: response.intrusion_set,
+    cwe_ids: response.cwe_ids,
+    validation: response.validation
+  };
 };
 
 // --- RULES ENDPOINTS ---
 
 /**
  * Fetch rules with pagination and filters
- * Transform backend response to match frontend expectations
  */
 export const fetchRules = async (
   pagination?: PaginationParams,
@@ -116,86 +188,35 @@ export const fetchRules = async (
   const params = buildQueryParams(pagination, filters);
   const response = await apiGet<any>(ENDPOINTS.RULES, params);
   
-  // Backend returns 'items' array, transform to match frontend RuleSummary interface
-  const transformedRules = (response.items || []).map((item: any) => ({
-    id: item.id,
-    source_rule_id: item.rule_id,
-    title: item.name,  // Backend 'name' -> Frontend 'title'
-    description: item.description,
-    platforms: item.platforms || [],
-    rule_source: item.rule_source,
-    severity: item.severity,
-    status: item.is_active ? 'active' : 'inactive',
-    created_date: item.created_date,
-    modified_date: item.modified_date,
-    rule_platforms: item.platforms || [],
-    linked_technique_ids: item.mitre_techniques || [],
-    has_mitre_mapping: item.has_mitre || false,
-    has_cve_references: item.has_cves || false,
-    enrichment_score: item.enrichment_score,
-    tags: item.tags || []
+  // API returns 'rules' array, not 'items'
+  const rulesArray = response.rules || [];
+  
+  // Rules already come properly formatted from backend, minimal transformation needed
+  const transformedRules = rulesArray.map((rule: any) => ({
+    ...rule,
+    // Ensure consistent field names
+    title: rule.title || rule.name,
+    status: rule.status || (rule.is_active ? 'active' : 'inactive'),
   }));
   
   return {
     rules: transformedRules,
-    items: transformedRules,  // Duplicate for backward compatibility
+    items: transformedRules, // Alias for backward compatibility
     total: response.total || 0,
     offset: response.offset || 0,
     limit: response.limit || params.limit || 25,
-    page: response.page || (pagination?.page ?? 1),
-    totalPages: response.totalPages || Math.ceil((response.total || 0) / (params.limit || 25))
+    page: response.page || Math.ceil(response.offset / (response.limit || 25)) + 1,
+    totalPages: response.totalPages || Math.ceil(response.total / (response.limit || 25)),
+    facets: response.facets
   };
 };
 
 /**
  * Fetch rule by ID
- * Transform backend response to match frontend RuleDetail interface
  */
 export const fetchRuleById = async (id: string): Promise<RuleDetail> => {
   const response = await apiGet<any>(ENDPOINTS.RULE_BY_ID(id));
-  
-  // Transform mitre_techniques if they exist and are complex objects
-  const linkedTechniqueIds = response.mitre_techniques 
-    ? (typeof response.mitre_techniques[0] === 'string' 
-        ? response.mitre_techniques 
-        : response.mitre_techniques.map((t: any) => t.technique_id || t))
-    : [];
-  
-  return {
-    // Base fields matching RuleSummary
-    id: response.id,
-    source_rule_id: response.rule_id,
-    title: response.name,
-    description: response.description,
-    platforms: response.platforms || [],
-    rule_source: response.rule_source,
-    severity: response.severity,
-    status: response.is_active ? 'active' : 'inactive',
-    created_date: response.created_date,
-    modified_date: response.modified_date,
-    rule_platforms: response.platforms || [],
-    linked_technique_ids: linkedTechniqueIds,
-    has_mitre_mapping: response.has_mitre || linkedTechniqueIds.length > 0,
-    has_cve_references: response.has_cves || (response.cve_references?.length > 0),
-    enrichment_score: response.enrichment_score,
-    tags: response.tags || [],
-    
-    // Extended fields for RuleDetail
-    author: response.author,
-    source_file_path: response.source_file_path,
-    raw_rule: response.raw_rule,
-    linked_techniques: response.mitre_techniques || [],
-    elastic_details: response.elastic_details,
-    sentinel_details: response.sentinel_details,
-    trinitycyber_details: response.trinitycyber_details,
-    mitre_techniques: response.mitre_techniques,
-    cve_references: response.cve_references,
-    cves: response.cve_references,
-    related_rules: response.related_rules,
-    rule_metadata: response.rule_metadata,
-    rule_content: response.rule_content,
-    is_active: response.is_active
-  };
+  return transformRuleResponse(response);
 };
 
 /**
@@ -204,108 +225,119 @@ export const fetchRuleById = async (id: string): Promise<RuleDetail> => {
 export const fetchRuleStats = async (
   filters?: RuleFilters
 ): Promise<FetchRuleStatsResponse> => {
-  const params = buildQueryParams(undefined, filters);
-  return await apiGet<FetchRuleStatsResponse>(ENDPOINTS.RULES_STATS, params);
+  const params = filters ? buildQueryParams(undefined, filters) : {};
+  const response = await apiGet<any>(ENDPOINTS.RULES_STATS, params);
+  
+  return {
+    total_rules: response.total_rules || 0,
+    active_rules: response.active_rules || response.total_rules || 0,
+    inactive_rules: response.inactive_rules || 0,
+    active_filters: response.active_filters,
+    stats: {
+      by_severity: response.stats?.by_severity || {},
+      by_platform: response.stats?.by_platform || response.stats?.by_rule_platform || {},
+      by_rule_source: response.stats?.by_rule_source || {},
+      by_rule_platform: response.stats?.by_rule_platform || {},
+      by_mitre_coverage: response.stats?.by_mitre_coverage || {},
+      by_cve_coverage: response.stats?.by_cve_coverage || {},
+      by_enrichment_quality: response.stats?.by_enrichment_quality || {}
+    },
+    enrichment_stats: {
+      rules_with_mitre: response.enrichment?.rules_with_mitre || response.enrichment?.mitre?.total_enriched || 0,
+      rules_with_cves: response.enrichment?.rules_with_cves || response.enrichment?.cve?.total_enriched || 0,
+      average_enrichment_score: response.enrichment?.average_enrichment_score || 0,
+      total_mitre_techniques_covered: response.enrichment?.total_mitre_techniques_covered || 0,
+      total_cves_referenced: response.enrichment?.total_cves_referenced || 0
+    }
+  };
 };
 
 /**
- * Fetch rule enrichment statistics
+ * Export rules
  */
-export const fetchRuleEnrichmentStats = async (): Promise<any> => {
-  return await apiGet<any>(ENDPOINTS.RULES_ENRICHMENT);
-};
-
-/**
- * Export rules in various formats
- */
-export const exportRules = async (
-  options: ExportOptions
-): Promise<ExportResponse> => {
+export const exportRules = async (options: ExportOptions): Promise<ExportResponse> => {
   const params = {
     format: options.format,
     include_enrichments: options.include_enrichments,
     include_raw_content: options.include_raw_content,
     ...buildQueryParams(undefined, options.filters)
   };
-  return await apiGet<ExportResponse>(ENDPOINTS.RULES_EXPORT, params);
-};
-
-// --- MITRE ENDPOINTS ---
-
-/**
- * Fetch MITRE ATT&CK matrix
- */
-export const fetchMitreMatrix = async (): Promise<MitreMatrixData> => {
-  const response = await apiGet<any>(ENDPOINTS.MITRE_MATRIX);
   
-  // Handle wrapped or direct response
-  const matrixData = response.matrix || response;
-  
-  // Ensure consistent ID field naming
-  return matrixData.map((tactic: any) => ({
-    ...tactic,
-    id: tactic.tactic_id || tactic.id,
-    techniques: (tactic.techniques || []).map((technique: any) => ({
-      ...technique,
-      id: technique.technique_id || technique.id,
-      subtechniques: (technique.subtechniques || []).map((subtech: any) => ({
-        ...subtech,
-        id: subtech.technique_id || subtech.id,
-      }))
-    }))
-  }));
-};
-
-/**
- * Fetch technique coverage analysis
- */
-export const fetchTechniqueCoverage = async (
-  platform?: string | null,
-  rulePlatform?: string | null,
-  includeSubtechniques?: boolean
-): Promise<TechniquesCoverageResponse> => {
-  const params: Record<string, any> = {};
-  
-  if (platform) params.platform = platform;
-  if (rulePlatform) params.rule_platform = rulePlatform;
-  if (includeSubtechniques !== undefined) {
-    params.include_subtechniques = includeSubtechniques;
-  }
-  
-  return await apiGet<TechniquesCoverageResponse>(ENDPOINTS.MITRE_COVERAGE, params);
-};
-
-/**
- * Fetch paginated MITRE techniques
- */
-export const fetchMitreTechniques = async (
-  pagination?: PaginationParams,
-  search?: string
-): Promise<{ techniques: MitreTechnique[]; total: number }> => {
-  const params: Record<string, any> = {};
-  
-  if (pagination) {
-    params.offset = (pagination.page - 1) * pagination.limit;
-    params.limit = pagination.limit;
-  }
-  
-  if (search) params.query = search;
-  
-  const response = await apiGet<any>(ENDPOINTS.MITRE_TECHNIQUES, params);
+  const response = await apiPost<any>(ENDPOINTS.RULES_EXPORT, params);
   
   return {
-    techniques: response.items || response.techniques || [],
-    total: response.total || 0,
+    file_url: response.file_url,
+    download_url: response.download_url || response.file_url,
+    content: response.content,
+    filename: response.filename,
+    format: response.format || options.format
   };
+};
+
+// --- MITRE ATT&CK ENDPOINTS ---
+
+/**
+ * Fetch MITRE matrix data
+ */
+export const fetchMitreMatrix = async (
+  platforms?: string[]
+): Promise<MitreMatrixData> => {
+  const params = platforms?.length ? { platforms: platforms.join(',') } : {};
+  return await apiGet<MitreMatrixData>(ENDPOINTS.MITRE_MATRIX, params);
+};
+
+/**
+ * Fetch MITRE coverage data
+ */
+export const fetchMitreCoverage = async (
+  platforms?: string[],
+  includeDetails = false
+): Promise<TechniquesCoverageResponse> => {
+  const params: Record<string, any> = { include_details: includeDetails };
+  if (platforms?.length) {
+    params.platforms = platforms.join(',');
+  }
+  
+  const response = await apiGet<any>(ENDPOINTS.MITRE_COVERAGE, params);
+  
+  return {
+    total_techniques: response.total_techniques || 0,
+    covered_techniques: response.covered_techniques || 0,
+    coverage_percentage: response.coverage_percentage || 0,
+    techniques: response.techniques || [],
+    platform_filter_applied: response.platform_filter_applied,
+    rule_platform_filter_applied: response.rule_platform_filter_applied,
+    coverage_gaps: response.coverage_gaps,
+    metadata: response.metadata
+  };
+};
+
+/**
+ * Fetch MITRE techniques
+ */
+export const fetchMitreTechniques = async (
+  tacticId?: string,
+  platforms?: string[]
+): Promise<MitreTechnique[]> => {
+  const params: Record<string, any> = {};
+  if (tacticId) params.tactic_id = tacticId;
+  if (platforms?.length) params.platforms = platforms.join(',');
+  
+  const response = await apiGet<{ techniques: MitreTechnique[] }>(
+    ENDPOINTS.MITRE_TECHNIQUES,
+    params
+  );
+  
+  return response.techniques || [];
 };
 
 // --- CVE ENDPOINTS ---
 
 /**
- * Fetch CVEs with filters
+ * Fetch CVEs with pagination
  */
 export const fetchCves = async (
-  pagination: PaginationParams,
+  pagination: PaginationParams = { page: 1, limit: 25 },
   filters?: { severities?: string[]; with_rules_only?: boolean; query?: string }
 ): Promise<{ items: CveData[]; total: number }> => {
   const params: Record<string, any> = {
@@ -353,7 +385,25 @@ export const fetchCveStats = async (): Promise<CveStats> => {
  * Fetch filter options
  */
 export const fetchFilterOptions = async (): Promise<FilterOptionsResponse> => {
-  return await apiGet<FilterOptionsResponse>(ENDPOINTS.FILTERS_OPTIONS);
+  const response = await apiGet<any>(ENDPOINTS.FILTERS_OPTIONS);
+  
+  // Ensure all expected fields are present
+  return {
+    rule_sources: response.rule_sources || [],
+    siem_platforms: response.siem_platforms || [],
+    rule_types: response.rule_types || [],
+    severities: response.severities || [],
+    tactics: response.tactics || [],
+    platforms: response.platforms || [],
+    rule_platforms: response.rule_platforms || [],
+    areas_of_responsibility: response.areas_of_responsibility || [],
+    data_sources: response.data_sources || [],
+    info_controls: response.info_controls || [],
+    popular_tags: response.popular_tags || [],
+    mitre_techniques: response.mitre_techniques || [],
+    cve_severities: response.cve_severities || [],
+    enrichment_levels: response.enrichment_levels || []
+  };
 };
 
 /**
@@ -406,6 +456,30 @@ export const fetchTrendData = async (
 };
 
 // --- ISSUE CREATION ---
+
+/**
+ * Fetch MITRE technique coverage data
+ * Alias for fetchMitreCoverage for backward compatibility
+ */
+export const fetchTechniqueCoverage = fetchMitreCoverage;
+
+/**
+ * Fetch rule enrichment statistics
+ */
+export const fetchRuleEnrichmentStats = async (): Promise<{
+  total_rules: number;
+  rules_with_mitre: number;
+  rules_with_cves: number;
+  average_enrichment_score: number;
+}> => {
+  const response = await apiGet<any>(ENDPOINTS.RULES_ENRICHMENT || '/rules/enrichment');
+  return {
+    total_rules: response.total_rules || 0,
+    rules_with_mitre: response.rules_with_mitre || 0,
+    rules_with_cves: response.rules_with_cves || 0,
+    average_enrichment_score: response.average_enrichment_score || 0
+  };
+};
 
 /**
  * Create an issue for a rule
