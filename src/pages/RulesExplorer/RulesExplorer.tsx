@@ -4,8 +4,6 @@ import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from
 import {
   Box,
   Typography,
-  Button,
-  ButtonGroup,
   IconButton,
   Tooltip,
   Menu,
@@ -13,18 +11,12 @@ import {
   Drawer,
   useTheme,
   useMediaQuery,
-  Chip,
-  FormControlLabel,
-  Switch,
-  Alert,
   Stack,
   Paper,
   Select,
-  FormControl,
   SelectChangeEvent,
   Divider,
   alpha,
-  Badge,
   ToggleButton,
   ToggleButtonGroup,
 } from '@mui/material';
@@ -46,29 +38,23 @@ import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 
 // API and Types
-import { RuleSummary, RuleSeverity } from '@/api/types';
-import { useExportRulesMutation } from '@/api/queries';
+import { RuleSummary } from '@/api/types';
 
 // Components
 import { LoadingIndicator, ErrorDisplay, EmptyState } from '@/components/common';
 import { RuleFilterBar } from '@/components/rules';
 import RulesTable from '@/components/rules/RulesTable';
 import VirtualizedRuleGrid from '@/components/rules/VirtualizedRuleGrid';
-import { SkeletonGrid } from '@/components/rules/RuleCardSkeleton';
 
 // Hooks and Utils
 import usePaginatedRules from '@/hooks/data/usePaginatedRules';
 import useRuleBookmarks from '@/hooks/data/useRuleBookmarks';
 import { useRuleStore } from '@/store';
 import { useRuleQuery } from '@/api/queries';
-import { SEVERITY_DISPLAY, PAGE_SIZES } from '@/utils/constants';
 import { formatDate } from '@/utils/format';
-
-import { ApiError } from '@/api/types';
 
 // Lazy Components
 const LazyRuleDetail = lazy(() => import('@/components/rules/RuleDetail'));
-const LazyRuleCard = lazy(() => import('@/components/rules/RuleCard'));
 
 const HEADER_HEIGHT = 96;
 
@@ -186,11 +172,10 @@ const PaginationControls: React.FC<PaginationControlsProps> = ({
 const RulesExplorer: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const isTablet = useMediaQuery(theme.breakpoints.down('lg'));
   const location = useLocation();
 
   // Store hooks
-  const { selectedRule, selectRule: setSelectedRuleInStore } = useRuleStore();
+  const { selectRule: setSelectedRuleInStore } = useRuleStore();
 
   // Local state
   const [viewMode, setViewMode] = useState<ViewMode>('table');
@@ -226,8 +211,6 @@ const RulesExplorer: React.FC = () => {
     handleSortChange,
     refetch,
     resetFiltersAndPage,
-    facets,
-    debugInfo,
   } = usePaginatedRules();
 
   // Rule detail query
@@ -236,14 +219,10 @@ const RulesExplorer: React.FC = () => {
     isLoading: isLoadingDetail,
     isError: isErrorDetail,
     error: errorDetail,
-    refetch: refetchDetail,
   } = useRuleQuery(selectedRuleIdForDetail);
 
   // Bookmarks functionality
   const { bookmarkedRules, toggleBookmark, isBookmarked } = useRuleBookmarks();
-
-  // Export mutation
-  const exportMutation = useExportRulesMutation();
 
   // Computed values
   const rulesToDisplay = useMemo(() => {
@@ -253,32 +232,30 @@ const RulesExplorer: React.FC = () => {
     return fetchedRules;
   }, [fetchedRules, showBookmarkedOnly, bookmarkedRules]);
 
-  const currentDisplayedCount = rulesToDisplay.length;
-  const currentTotalCountForStatus = showBookmarkedOnly ? bookmarkedRules.size : totalRules;
   const effectiveIsLoading = isLoading || isFetching;
 
   // Event handlers
   const handleRuleSelect = useCallback((ruleSummary: RuleSummary) => {
+    setSelectedRuleInStore(ruleSummary);
     setSelectedRuleIdForDetail(ruleSummary.id);
     setDetailDrawerOpen(true);
-  }, []);
-
-  const handleToggleShowBookmarked = useCallback(() => {
-    setShowBookmarkedOnly(prev => !prev);
-  }, []);
+  }, [setSelectedRuleInStore]);
 
   const handleCloseDetail = useCallback(() => {
     setDetailDrawerOpen(false);
-    setSelectedRuleIdForDetail(null);
-    setSelectedRuleInStore(null);
+    setTimeout(() => {
+      setSelectedRuleIdForDetail(null);
+      setSelectedRuleInStore(null);
+    }, 300);
   }, [setSelectedRuleInStore]);
 
   const handleRefresh = useCallback(() => {
     refetch();
-    if (selectedRuleIdForDetail && detailDrawerOpen) {
-      refetchDetail();
-    }
-  }, [refetch, selectedRuleIdForDetail, detailDrawerOpen, refetchDetail]);
+  }, [refetch]);
+
+  const handleToggleShowBookmarked = useCallback(() => {
+    setShowBookmarkedOnly(prev => !prev);
+  }, []);
 
   const handlePageSizeChange = useCallback((newPageSize: number) => {
     handlePageChange(1, newPageSize);
@@ -287,27 +264,24 @@ const RulesExplorer: React.FC = () => {
   const handleExportRules = useCallback(() => {
     setMoreMenuAnchor(null);
     
+    // For bookmarked rules, export locally instead of using API
     const rulesForExport = showBookmarkedOnly ? rulesToDisplay : fetchedRules;
     if (!rulesForExport || rulesForExport.length === 0) {
       alert('No rules to export.');
       return;
     }
 
-    // CSV export logic (simplified for brevity)
+    // Client-side CSV export
     const csvContent = [
-      ['ID', 'Title', 'Description', 'Severity', 'Status', 'Source', 'Platforms', 'MITRE Techniques', 'Has MITRE', 'Has CVE', 'Enrichment Score', 'Created', 'Modified'].join(','),
+      ['ID', 'Title', 'Description', 'Status', 'Source', 'Platforms', 'MITRE Techniques', 'Created', 'Modified'].join(','),
       ...rulesForExport.map(rule => [
-        rule.source_rule_id,
+        rule.id,
         `"${(rule.title || '').replace(/"/g, '""')}"`,
         `"${(rule.description || '').replace(/"/g, '""')}"`,
-        rule.severity,
         rule.status ?? 'unknown',
         rule.rule_source,
         `"${(rule.rule_platforms ?? []).join('; ')}"`,
         `"${(rule.linked_technique_ids ?? []).join('; ')}"`,
-        rule.has_mitre_mapping ? 'Yes' : 'No',
-        rule.has_cve_references ? 'Yes' : 'No',
-        rule.enrichment_score ?? 0,
         rule.created_date ? formatDate(rule.created_date) : '-',
         rule.modified_date ? formatDate(rule.modified_date) : '-',
       ].join(','))
@@ -317,48 +291,40 @@ const RulesExplorer: React.FC = () => {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `saint-rules-${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `rules_export_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   }, [showBookmarkedOnly, rulesToDisplay, fetchedRules]);
 
-  // Update global store when rule detail is loaded
-  useEffect(() => {
-    if (selectedRuleFullDetail) {
-      setSelectedRuleInStore(selectedRuleFullDetail);
-    }
-  }, [selectedRuleFullDetail, setSelectedRuleInStore]);
+  const handleViewModeChange = useCallback((_: React.MouseEvent<HTMLElement>, value: ViewMode | null) => {
+    if (value) setViewMode(value);
+  }, []);
 
-  // Content rendering
+  const handleSortModelChange = useCallback((model: any) => {
+    handleSortChange(model);
+  }, [handleSortChange]);
+
+  const handlePaginationChange = useCallback((page: number, newPageSize?: number) => {
+    handlePageChange(page + 1, newPageSize);
+  }, [handlePageChange]);
+
+  // Render content
   const renderContent = () => {
-    if (effectiveIsLoading && fetchedRules.length === 0) {
+    if (isError && error) {
       return (
         <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Stack spacing={2} alignItems="center">
-            <LoadingIndicator size={48} />
-            <Typography variant="body2" color="text.secondary">
-              Loading rules...
-            </Typography>
-          </Stack>
-        </Box>
-      );
-    }
-
-    if (isError) {
-      return (
-        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <ErrorDisplay 
-            message={error?.message || 'Failed to load rules'} 
-            details={(error as any)?.details ? JSON.stringify((error as any).details) : undefined}
-            onRetry={handleRefresh}
+          <ErrorDisplay
+            message={error.message || "Failed to load rules. Please try again."}
+            details={import.meta.env.DEV ? error.stack : undefined}
+            onRetry={refetch}
           />
         </Box>
       );
     }
 
-    if (rulesToDisplay.length === 0) {
+    if (!effectiveIsLoading && rulesToDisplay.length === 0) {
       const message = showBookmarkedOnly 
         ? "No bookmarked rules found. Bookmark some rules to see them here."
         : hasActiveFilters 
@@ -385,10 +351,9 @@ const RulesExplorer: React.FC = () => {
         <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
           <VirtualizedRuleGrid
             rules={rulesToDisplay}
-            bookmarkedRuleIds={bookmarkedRules}
+            isBookmarked={isBookmarked}
             onRuleSelect={handleRuleSelect}
             onBookmark={toggleBookmark}
-            isLoading={effectiveIsLoading}
           />
         </Box>
       );
@@ -401,10 +366,13 @@ const RulesExplorer: React.FC = () => {
           bookmarkedRuleIds={bookmarkedRules}
           isLoading={effectiveIsLoading}
           totalRules={totalRules}
+          currentPage={currentPage - 1}
+          pageSize={pageSize}
           sortModel={sortModel}
           onRuleSelect={handleRuleSelect}
           onBookmark={toggleBookmark}
-          onSortChange={handleSortChange}
+          onSortChange={handleSortModelChange}
+          onPaginationChange={handlePaginationChange}
         />
       </Box>
     );
@@ -471,7 +439,7 @@ const RulesExplorer: React.FC = () => {
             <ToggleButtonGroup
               value={viewMode}
               exclusive
-              onChange={(_, value) => value && setViewMode(value)}
+              onChange={handleViewModeChange}
               size="small"
             >
               <ToggleButton value="table">
@@ -565,14 +533,15 @@ const RulesExplorer: React.FC = () => {
             <LoadingIndicator />
           </Box>
         }>
-          {selectedRuleIdForDetail && (
+          {selectedRuleIdForDetail && selectedRuleFullDetail && (
             <LazyRuleDetail
-              ruleId={selectedRuleIdForDetail}
+              rule={selectedRuleFullDetail}
               onClose={handleCloseDetail}
               isLoading={isLoadingDetail}
               isError={isErrorDetail}
               error={errorDetail}
-              rule={selectedRuleFullDetail}
+              isBookmarked={isBookmarked(selectedRuleIdForDetail)}
+              onBookmark={toggleBookmark}
             />
           )}
         </Suspense>
