@@ -158,6 +158,22 @@ export interface RuleDetail extends RuleSummary {
   rule_content?: string | null;
   is_active?: boolean;
   [key: string]: any; 
+  siem_platform?: string | null;
+  aor?: string | null;
+  source_org?: string | null;
+  data_sources?: string[] | null;
+  info_controls?: string | null;
+  modified_by?: string | null;
+  hunt_id?: string | null;
+  malware_family?: string | null;
+  intrusion_set?: string | null;
+  cwe_ids?: string[] | null;
+  validation?: {
+    testable_via?: string | null;
+    asv_action_id?: string | null;
+    validated?: boolean;
+    last_tested?: string | null;
+  } | null;
 }
 
 // --- API Response Types ---
@@ -250,21 +266,25 @@ export interface FilterOption {
   value: string;
   label: string;
   count?: number;
-  description?: string;
+  source_type?: string;
+  rule_count?: number;
+  children?: FilterOption[]; // For grouped options like Elastic SIEM
 }
 
 export interface FilterOptionsResponse {
-  platforms: FilterOption[];
   rule_sources: FilterOption[];
+  siem_platforms?: FilterOption[];
+  rule_types: FilterOption[];
   severities: FilterOption[];
   tactics: FilterOption[];
+  platforms: FilterOption[];
   rule_platforms: FilterOption[];
-  mitre_techniques: FilterOption[];
-  cve_severities: FilterOption[];
-  enrichment_levels: FilterOption[];
+  areas_of_responsibility?: FilterOption[];
+  data_sources?: FilterOption[];
+  info_controls?: FilterOption[];
+  popular_tags?: FilterOption[];
 }
 
-// FIX 3: Extended RuleFilters with enrichment fields
 export interface RuleFilters {
   search?: string;
   query?: string;
@@ -272,7 +292,8 @@ export interface RuleFilters {
   platforms?: string[];
   techniques?: string[];
   tactics?: string[];
-  rule_source?: string[];
+  rule_source?: string[];  // for backward compatibility
+  rule_sources?: string[]; 
   tags?: string[];
   dateRange?: { start?: string; end?: string; } | null;
   rule_platform?: string[];
@@ -281,9 +302,11 @@ export interface RuleFilters {
   has_mitre?: boolean;
   has_cves?: boolean;
   is_active?: boolean;
-  has_mitre_mapping?: boolean;
-  has_cve_references?: boolean;
-  enrichment_score_min?: number;
+  
+  siem_platforms?: string[];
+  aors?: string[];
+  data_sources?: string[];
+  info_controls?: string[];
 }
 
 // --- Export Options ---
