@@ -5,6 +5,7 @@ import {
   Box,
   Typography,
   Button,
+  ButtonGroup,
   IconButton,
   Tooltip,
   Menu,
@@ -13,27 +14,44 @@ import {
   useTheme,
   useMediaQuery,
   Chip,
-  Pagination,
   FormControlLabel,
   Switch,
   Alert,
   Stack,
+  Paper,
+  Select,
+  FormControl,
+  SelectChangeEvent,
+  Divider,
+  alpha,
+  Badge,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
+
+// Icons
 import RefreshIcon from '@mui/icons-material/Refresh';
-import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import DownloadIcon from '@mui/icons-material/Download';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
-import { GridColDef, GridSortModel } from '@mui/x-data-grid';
+import BookmarkIcon from '@mui/icons-material/Bookmark';
+import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import InsightsIcon from '@mui/icons-material/Insights';
+import SecurityIcon from '@mui/icons-material/Security';
+import FirstPageIcon from '@mui/icons-material/FirstPage';
+import LastPageIcon from '@mui/icons-material/LastPage';
+import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 
 // API and Types
 import { RuleSummary, RuleSeverity } from '@/api/types';
 import { useExportRulesMutation } from '@/api/queries';
 
 // Components
-import { LoadingIndicator, ErrorDisplay, EmptyState, StatusBadge } from '@/components/common';
-import { RuleFilterBar, RuleStatusBar } from '@/components/rules';
+import { LoadingIndicator, ErrorDisplay, EmptyState } from '@/components/common';
+import { RuleFilterBar } from '@/components/rules';
 import RulesTable from '@/components/rules/RulesTable';
 import VirtualizedRuleGrid from '@/components/rules/VirtualizedRuleGrid';
 import { SkeletonGrid } from '@/components/rules/RuleCardSkeleton';
@@ -56,9 +74,119 @@ const HEADER_HEIGHT = 96;
 
 type ViewMode = 'table' | 'grid';
 
+interface PaginationControlsProps {
+  currentPage: number;
+  totalPages: number;
+  pageSize: number;
+  totalRules: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+  disabled?: boolean;
+}
+
+const PaginationControls: React.FC<PaginationControlsProps> = ({
+  currentPage,
+  totalPages,
+  pageSize,
+  totalRules,
+  onPageChange,
+  onPageSizeChange,
+  disabled = false,
+}) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
+  const startIndex = (currentPage - 1) * pageSize + 1;
+  const endIndex = Math.min(currentPage * pageSize, totalRules);
+  
+  return (
+    <Stack
+      direction="row"
+      spacing={2}
+      alignItems="center"
+      sx={{
+        px: 2,
+        py: 1,
+        borderTop: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
+        backgroundColor: alpha(theme.palette.background.default, 0.4),
+      }}
+    >
+      {/* Results info */}
+      <Typography variant="body2" color="text.secondary" sx={{ minWidth: 120 }}>
+        {totalRules > 0 ? `${startIndex}–${endIndex} of ${totalRules}` : 'No results'}
+      </Typography>
+      
+      <Box sx={{ flex: 1 }} />
+      
+      {/* Page size selector */}
+      {!isMobile && (
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Typography variant="body2" color="text.secondary">
+            Rows per page:
+          </Typography>
+          <Select
+            value={pageSize}
+            onChange={(e: SelectChangeEvent<number>) => onPageSizeChange(Number(e.target.value))}
+            size="small"
+            disabled={disabled}
+            sx={{
+              minWidth: 70,
+              '& .MuiSelect-select': { py: 0.5 },
+            }}
+          >
+            {[10, 25, 50, 100].map((size) => (
+              <MenuItem key={size} value={size}>
+                {size}
+              </MenuItem>
+            ))}
+          </Select>
+        </Stack>
+      )}
+      
+      {/* Page navigation */}
+      <Stack direction="row" spacing={0.5} alignItems="center">
+        <IconButton
+          size="small"
+          onClick={() => onPageChange(1)}
+          disabled={disabled || currentPage === 1}
+        >
+          <FirstPageIcon fontSize="small" />
+        </IconButton>
+        <IconButton
+          size="small"
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={disabled || currentPage === 1}
+        >
+          <NavigateBeforeIcon fontSize="small" />
+        </IconButton>
+        
+        <Typography variant="body2" sx={{ mx: 1, minWidth: 60, textAlign: 'center' }}>
+          {currentPage} / {totalPages || 1}
+        </Typography>
+        
+        <IconButton
+          size="small"
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={disabled || currentPage >= totalPages}
+        >
+          <NavigateNextIcon fontSize="small" />
+        </IconButton>
+        <IconButton
+          size="small"
+          onClick={() => onPageChange(totalPages)}
+          disabled={disabled || currentPage >= totalPages}
+        >
+          <LastPageIcon fontSize="small" />
+        </IconButton>
+      </Stack>
+    </Stack>
+  );
+};
+
 const RulesExplorer: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('lg'));
   const location = useLocation();
 
   // Store hooks
@@ -69,7 +197,7 @@ const RulesExplorer: React.FC = () => {
   const [showBookmarkedOnly, setShowBookmarkedOnly] = useState(false);
   const [selectedRuleIdForDetail, setSelectedRuleIdForDetail] = useState<string | null>(null);
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
-  const [actionMenuAnchor, setActionMenuAnchor] = useState<null | HTMLElement>(null);
+  const [moreMenuAnchor, setMoreMenuAnchor] = useState<null | HTMLElement>(null);
 
   // Handle opening rule detail from navigation state
   useEffect(() => {
@@ -77,12 +205,11 @@ const RulesExplorer: React.FC = () => {
     if (ruleIdToOpen) {
       setSelectedRuleIdForDetail(ruleIdToOpen);
       setDetailDrawerOpen(true);
-      // Clear the state to prevent the drawer from re-opening on page refresh
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
 
-  // Main data hook - enhanced with better error handling
+  // Main data hook
   const {
     rules: fetchedRules,
     totalRules,
@@ -132,21 +259,13 @@ const RulesExplorer: React.FC = () => {
 
   // Event handlers
   const handleRuleSelect = useCallback((ruleSummary: RuleSummary) => {
-    console.log('RulesExplorer: Rule selected:', ruleSummary.id);
     setSelectedRuleIdForDetail(ruleSummary.id);
     setDetailDrawerOpen(true);
   }, []);
 
-  const handleToggleShowBookmarked = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    setShowBookmarkedOnly(event.target.checked);
+  const handleToggleShowBookmarked = useCallback(() => {
+    setShowBookmarkedOnly(prev => !prev);
   }, []);
-
-  // Update global store when rule detail is loaded
-  useEffect(() => {
-    if (selectedRuleFullDetail) {
-      setSelectedRuleInStore(selectedRuleFullDetail);
-    }
-  }, [selectedRuleFullDetail, setSelectedRuleInStore]);
 
   const handleCloseDetail = useCallback(() => {
     setDetailDrawerOpen(false);
@@ -155,16 +274,18 @@ const RulesExplorer: React.FC = () => {
   }, [setSelectedRuleInStore]);
 
   const handleRefresh = useCallback(() => {
-    console.log('RulesExplorer: Manual refresh requested');
     refetch();
     if (selectedRuleIdForDetail && detailDrawerOpen) {
       refetchDetail();
     }
   }, [refetch, selectedRuleIdForDetail, detailDrawerOpen, refetchDetail]);
 
-  // Enhanced export functionality using the new API
+  const handlePageSizeChange = useCallback((newPageSize: number) => {
+    handlePageChange(1, newPageSize);
+  }, [handlePageChange]);
+
   const handleExportRules = useCallback(() => {
-    setActionMenuAnchor(null);
+    setMoreMenuAnchor(null);
     
     const rulesForExport = showBookmarkedOnly ? rulesToDisplay : fetchedRules;
     if (!rulesForExport || rulesForExport.length === 0) {
@@ -172,41 +293,13 @@ const RulesExplorer: React.FC = () => {
       return;
     }
 
-    // Use the new export API endpoint
-    exportMutation.mutate(
-      {
-        format: 'csv',
-        include_enrichments: true,
-        include_raw_content: false, 
-        filters: showBookmarkedOnly ? undefined : debugInfo?.currentFilters,
-      },
-      {
-        onSuccess: (response) => {
-          // Open the download URL
-          window.open(response.download_url, '_blank');
-        },
-        onError: (error) => {
-          console.error('Export failed:', error);
-          // Fallback to client-side CSV export
-          handleLegacyExport(rulesForExport);
-        },
-      }
-    );
-  }, [showBookmarkedOnly, rulesToDisplay, fetchedRules, exportMutation, debugInfo]);
-
-  // Fallback CSV export (client-side)
-  const handleLegacyExport = useCallback((rules: RuleSummary[]) => {
-    const headers = [
-      'ID', 'Title', 'Severity', 'Status', 'Rule Source', 'Rule Platforms', 
-      'Linked Technique IDs', 'Has MITRE Mapping', 'Has CVE References',
-      'Enrichment Score', 'Created Date', 'Modified Date'
-    ];
-    
+    // CSV export logic (simplified for brevity)
     const csvContent = [
-      headers.join(','),
-      ...rules.map((rule) => [
-        rule.id,
-        `"${(rule.title ?? '').replace(/"/g, '""')}"`,
+      ['ID', 'Title', 'Description', 'Severity', 'Status', 'Source', 'Platforms', 'MITRE Techniques', 'Has MITRE', 'Has CVE', 'Enrichment Score', 'Created', 'Modified'].join(','),
+      ...rulesForExport.map(rule => [
+        rule.source_rule_id,
+        `"${(rule.title || '').replace(/"/g, '""')}"`,
+        `"${(rule.description || '').replace(/"/g, '""')}"`,
         rule.severity,
         rule.status ?? 'unknown',
         rule.rule_source,
@@ -229,14 +322,16 @@ const RulesExplorer: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  }, []);
+  }, [showBookmarkedOnly, rulesToDisplay, fetchedRules]);
 
-  // Pagination handler
-  const handleGridPagination = useCallback((event: React.ChangeEvent<unknown>, page: number) => {
-    handlePageChange(page);
-  }, [handlePageChange]);
+  // Update global store when rule detail is loaded
+  useEffect(() => {
+    if (selectedRuleFullDetail) {
+      setSelectedRuleInStore(selectedRuleFullDetail);
+    }
+  }, [selectedRuleFullDetail, setSelectedRuleInStore]);
 
-  // Content rendering functions
+  // Content rendering
   const renderContent = () => {
     if (effectiveIsLoading && fetchedRules.length === 0) {
       return (
@@ -285,206 +380,168 @@ const RulesExplorer: React.FC = () => {
       );
     }
 
-    // Render table or grid based on view mode
-    if (viewMode === 'table') {
+    if (viewMode === 'grid') {
       return (
-        <RulesTable
-          rules={rulesToDisplay}
-          totalRules={currentTotalCountForStatus}
-          currentPage={currentPage}
-          pageSize={pageSize}
-          sortModel={sortModel}
-          isLoading={effectiveIsLoading}
-          onRuleSelect={handleRuleSelect}
-          onPaginationChange={handlePageChange}
-          onSortChange={handleSortChange}
-        />
-      );
-    } else {
-      return (
-        <Suspense fallback={<SkeletonGrid />}>
+        <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
           <VirtualizedRuleGrid
             rules={rulesToDisplay}
+            bookmarkedRuleIds={bookmarkedRules}
             onRuleSelect={handleRuleSelect}
-            isBookmarked={isBookmarked}
             onBookmark={toggleBookmark}
+            isLoading={effectiveIsLoading}
           />
-        </Suspense>
+        </Box>
       );
     }
+
+    return (
+      <Box sx={{ flex: 1, overflow: 'hidden' }}>
+        <RulesTable
+          rules={rulesToDisplay}
+          bookmarkedRuleIds={bookmarkedRules}
+          isLoading={effectiveIsLoading}
+          totalRules={totalRules}
+          sortModel={sortModel}
+          onRuleSelect={handleRuleSelect}
+          onBookmark={toggleBookmark}
+          onSortChange={handleSortChange}
+        />
+      </Box>
+    );
   };
 
   return (
-    <Box sx={{ 
-      height: '100%', 
-      display: 'flex', 
-      flexDirection: 'column', 
-      p: isMobile ? 1 : 3, 
-      overflow: 'hidden' 
-    }}>
-      {/* Header Controls */}
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: { xs: 'flex-start', sm: 'center' }, 
-        flexDirection: { xs: 'column', sm: 'row' }, 
-        gap: 2, 
-        mb: 2 
-      }}>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Bookmarked filter toggle */}
-          <FormControlLabel 
-            control={
-              <Switch 
-                checked={showBookmarkedOnly} 
-                onChange={handleToggleShowBookmarked} 
-              />
-            } 
-            label={<Typography variant="caption">Show Bookmarked Only</Typography>} 
-            sx={{ mr: 1 }}
-          />
-          
-          {/* View mode toggle */}
-          <Box sx={{ 
-            display: 'flex', 
-            border: `1px solid ${theme.palette.divider}`, 
-            borderRadius: 1 
-          }}>
-            <Tooltip title="Table view">
-              <IconButton 
-                color={viewMode === 'table' ? 'primary' : 'default'} 
-                onClick={() => setViewMode('table')}
-              >
-                <ViewListIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Grid view">
-              <IconButton 
-                color={viewMode === 'grid' ? 'primary' : 'default'} 
-                onClick={() => setViewMode('grid')}
-              >
-                <ViewModuleIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
+    <Box
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: theme.palette.background.default,
+      }}
+    >
+      {/* Integrated Filter Bar */}
+      <Paper
+        elevation={0}
+        sx={{
+          borderRadius: 0,
+          borderBottom: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
+          backgroundColor: theme.palette.background.paper,
+        }}
+      >
+        <RuleFilterBar />
+        
+        {/* Secondary Toolbar */}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            px: 2,
+            py: 1,
+            borderTop: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
+          }}
+        >
+          {/* Left section - Bookmarks */}
+          <ToggleButton
+            value="bookmarks"
+            selected={showBookmarkedOnly}
+            onChange={handleToggleShowBookmarked}
+            size="small"
+            sx={{
+              px: 2,
+              border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+              '&.Mui-selected': {
+                backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                borderColor: theme.palette.primary.main,
+              },
+            }}
+          >
+            {showBookmarkedOnly ? <BookmarkIcon fontSize="small" /> : <BookmarkBorderIcon fontSize="small" />}
+            {!isMobile && (
+              <Typography variant="body2" sx={{ ml: 1 }}>
+                {showBookmarkedOnly ? 'Bookmarked' : 'Bookmarks'}
+                {bookmarkedRules.size > 0 && ` (${bookmarkedRules.size})`}
+              </Typography>
+            )}
+          </ToggleButton>
 
-          {/* Refresh button */}
-          <Tooltip title="Refresh data">
-            <IconButton 
-              onClick={handleRefresh} 
-              disabled={effectiveIsLoading} 
-              color="inherit"
+          {/* Right section - View controls */}
+          <Stack direction="row" spacing={1} alignItems="center">
+            {/* View mode toggle */}
+            <ToggleButtonGroup
+              value={viewMode}
+              exclusive
+              onChange={(_, value) => value && setViewMode(value)}
+              size="small"
+            >
+              <ToggleButton value="table">
+                <Tooltip title="Table view">
+                  <ViewListIcon fontSize="small" />
+                </Tooltip>
+              </ToggleButton>
+              <ToggleButton value="grid">
+                <Tooltip title="Grid view">
+                  <ViewModuleIcon fontSize="small" />
+                </Tooltip>
+              </ToggleButton>
+            </ToggleButtonGroup>
+
+            <Divider orientation="vertical" flexItem />
+
+            {/* Refresh */}
+            <IconButton
+              onClick={handleRefresh}
+              disabled={effectiveIsLoading}
+              size="small"
             >
               <RefreshIcon />
             </IconButton>
-          </Tooltip>
 
-          {/* Actions menu */}
-          <Button 
-            variant="outlined" 
-            startIcon={<UnfoldMoreIcon />} 
-            onClick={(e) => setActionMenuAnchor(e.currentTarget)} 
-            disabled={effectiveIsLoading}
-          >
-            Actions
-          </Button>
-          <Menu 
-            anchorEl={actionMenuAnchor} 
-            open={Boolean(actionMenuAnchor)} 
-            onClose={() => setActionMenuAnchor(null)}
-          >
-            <MenuItem 
-              onClick={handleExportRules} 
-              disabled={rulesToDisplay.length === 0}
+            {/* More menu */}
+            <IconButton
+              onClick={(e) => setMoreMenuAnchor(e.currentTarget)}
+              size="small"
             >
-              <DownloadIcon fontSize="small" sx={{ mr: 1 }} /> 
-              Export Rules ({showBookmarkedOnly ? 'Bookmarked' : 'All Filtered'})
-            </MenuItem>
-            <MenuItem 
-              component={RouterLink} 
-              to="/insights" 
-              onClick={() => setActionMenuAnchor(null)}
+              <MoreVertIcon />
+            </IconButton>
+            <Menu
+              anchorEl={moreMenuAnchor}
+              open={Boolean(moreMenuAnchor)}
+              onClose={() => setMoreMenuAnchor(null)}
             >
-              View Insights
-            </MenuItem>
-            <MenuItem 
-              component={RouterLink} 
-              to="/attack-matrix" 
-              onClick={() => setActionMenuAnchor(null)}
-            >
-              MITRE ATT&CK Matrix
-            </MenuItem>
-          </Menu>
-        </Box>
-      </Box>
-
-      {/* Filter Bar */}
-      <RuleFilterBar />
-
-      {/* Status Bar */}
-      <RuleStatusBar 
-        displayedCount={currentDisplayedCount} 
-        totalCount={currentTotalCountForStatus} 
-        hasActiveFilters={hasActiveFilters || showBookmarkedOnly} 
-        isLoading={effectiveIsLoading} 
-        onClearFilters={() => { 
-          resetFiltersAndPage(); 
-          setShowBookmarkedOnly(false); 
-        }} 
-      />
-
-      {/* Export status */}
-      {exportMutation.isPending && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <LoadingIndicator size={16} />
-            <Typography variant="body2">Preparing export...</Typography>
+              <MenuItem onClick={handleExportRules}>
+                <DownloadIcon fontSize="small" sx={{ mr: 1 }} />
+                Export CSV
+              </MenuItem>
+              <MenuItem component={RouterLink} to="/insights" onClick={() => setMoreMenuAnchor(null)}>
+                <InsightsIcon fontSize="small" sx={{ mr: 1 }} />
+                View Insights
+              </MenuItem>
+              <MenuItem component={RouterLink} to="/attack-matrix" onClick={() => setMoreMenuAnchor(null)}>
+                <SecurityIcon fontSize="small" sx={{ mr: 1 }} />
+                MITRE ATT&CK Matrix
+              </MenuItem>
+            </Menu>
           </Stack>
-        </Alert>
-      )}
+        </Box>
+      </Paper>
 
-      {exportMutation.isError && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          Export failed, falling back to basic CSV export.
-        </Alert>
-      )}
-
-      {/* Main Content Area */}
-      <Box sx={{ 
-        flex: 1, 
-        width: '100%', 
-        overflow: 'hidden', 
-        display: 'flex', 
-        flexDirection: 'column' 
-      }}>
+      {/* Main Content */}
+      <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {renderContent()}
       </Box>
 
-      {/* Pagination - only show for table view and when not showing bookmarked only */}
-      {totalPages > 1 && !showBookmarkedOnly && viewMode === 'table' && (
-        <Box sx={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          py: 2, 
-          mt: 1, 
-          borderTop: `1px solid ${theme.palette.divider}`, 
-          gap: 2, 
-          flexWrap: 'wrap' 
-        }}>
-          <Pagination 
-            count={totalPages} 
-            page={currentPage} 
-            onChange={handleGridPagination} 
-            color="primary" 
-            size={isMobile ? 'small' : 'medium'}
-            showFirstButton={!isMobile}
-            showLastButton={!isMobile}
-          />
-          <Typography variant="caption" color="text.secondary">
-            Page {currentPage} of {totalPages} • {totalRules} total rules
-          </Typography>
-        </Box>
+      {/* Pagination Controls */}
+      {totalPages > 1 && !showBookmarkedOnly && (
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          totalRules={totalRules}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+          disabled={effectiveIsLoading}
+        />
       )}
 
       {/* Rule Detail Drawer */}
@@ -497,7 +554,6 @@ const RulesExplorer: React.FC = () => {
             width: isMobile ? '100%' : '60%',
             maxWidth: '800px',
             minWidth: '400px',
-            // Fix: Position drawer below headers
             top: HEADER_HEIGHT,
             height: `calc(100% - ${HEADER_HEIGHT}px)`,
             position: 'fixed',
