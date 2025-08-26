@@ -192,7 +192,7 @@ export const useMitreMatrixQuery = (
 ) => {
   return useQuery<MitreMatrixData, Error>({
     queryKey: queryKeys.mitreMatrix(),
-    queryFn: fetchMitreMatrix,
+    queryFn: () => fetchMitreMatrix(), // Wrap in arrow function
     staleTime: 15 * 60 * 1000,
     ...options,
   });
@@ -210,6 +210,7 @@ export const useTechniqueCoverageQuery = (
     ...options,
   });
 };
+
 
 export const useMitreTechniquesQuery = (
   pagination?: PaginationParams,

@@ -42,7 +42,7 @@ import DataObjectIcon from '@mui/icons-material/DataObject';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import VerifiedIcon from '@mui/icons-material/Verified';
-import { RuleDetail as RuleDetailType } from '@/api/types';
+import { RuleDetail as RuleDetailType, MitreTechnique, CveData } from '@/api/types';
 import { StatusBadge, LoadingIndicator, ErrorDisplay } from '@/components/common';
 import { formatDate } from '@/utils/format';
 
@@ -103,7 +103,7 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
     if (!rule?.mitre_techniques) return [];
     if (showAllTechniques) return rule.mitre_techniques;
     return rule.mitre_techniques.filter(t => 
-      (t.confidence || 1.0) >= confidenceThreshold
+      (t.confidence ?? 1.0) >= confidenceThreshold
     );
   }, [rule?.mitre_techniques, confidenceThreshold, showAllTechniques]);
 
@@ -122,6 +122,11 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
     if (score >= 7.0) return theme.palette.warning.main;
     if (score >= 4.0) return theme.palette.info.main;
     return theme.palette.success.main;
+  };
+
+  // Helper to get technique ID from MitreTechnique object
+  const getTechniqueId = (technique: MitreTechnique): string => {
+    return technique.technique_id || technique.id;
   };
 
   if (isLoading) {
@@ -229,24 +234,24 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
               </Stack>
               <Collapse in={expandedSections.metadata}>
                 <Grid container spacing={2} sx={{ mt: 1 }}>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Typography variant="caption" color="text.secondary">Source</Typography>
                     <Typography variant="body2">{rule.rule_source}</Typography>
                   </Grid>
                   {rule.source_org && (
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                       <Typography variant="caption" color="text.secondary">Organization</Typography>
                       <Typography variant="body2">{rule.source_org}</Typography>
                     </Grid>
                   )}
                   {rule.author && (
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                       <Typography variant="caption" color="text.secondary">Author</Typography>
                       <Typography variant="body2">{rule.author}</Typography>
                     </Grid>
                   )}
                   {rule.hunt_id && (
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                       <Typography variant="caption" color="text.secondary">Hunt ID</Typography>
                       <Stack direction="row" spacing={1} alignItems="center">
                         <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
@@ -258,13 +263,13 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                       </Stack>
                     </Grid>
                   )}
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Typography variant="caption" color="text.secondary">Created</Typography>
                     <Typography variant="body2">
                       {rule.created_date ? formatDate(rule.created_date) : '-'}
                     </Typography>
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Typography variant="caption" color="text.secondary">Modified</Typography>
                     <Typography variant="body2">
                       {rule.modified_date ? formatDate(rule.modified_date) : '-'}
@@ -331,7 +336,9 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                       try {
                         const parsed = JSON.parse(rule.rule_content);
                         if (parsed.query) return parsed.query;
-                      } catch {}
+                      } catch {
+                        // Silently ignore JSON parse errors
+                      }
                     }
                     return 'No detection logic available';
                   })()}
@@ -343,44 +350,44 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
             <Paper sx={{ p: 2 }}>
               <Typography variant="subtitle2" gutterBottom>Technical Details</Typography>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="caption" color="text.secondary">Rule Type</Typography>
                   <Typography variant="body2">{rule.rule_type || '-'}</Typography>
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="caption" color="text.secondary">Language</Typography>
-                  <Typography variant="body2">{rule.language || rule.rule_metadata?.language || '-'}</Typography>
+                  <Typography variant="body2">{rule.language || rule.rule_metadata?.language as string || '-'}</Typography>
                 </Grid>
                 {rule.index && rule.index.length > 0 && (
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <Typography variant="caption" color="text.secondary">Indices</Typography>
                     <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-                      {rule.index.map((idx: string) => (
+                      {rule.index.map((idx) => (
                         <Chip key={idx} label={idx} size="small" variant="outlined" />
                       ))}
                     </Stack>
                   </Grid>
                 )}
                 {rule.raw_rule?.interval && (
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Typography variant="caption" color="text.secondary">Run Interval</Typography>
                     <Typography variant="body2">{rule.raw_rule.interval}</Typography>
                   </Grid>
                 )}
                 {rule.raw_rule?.from && (
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Typography variant="caption" color="text.secondary">Query Window</Typography>
                     <Typography variant="body2">{rule.raw_rule.from} to {rule.raw_rule?.to || 'now'}</Typography>
                   </Grid>
                 )}
                 {rule.raw_rule?.risk_score !== undefined && (
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Typography variant="caption" color="text.secondary">Risk Score</Typography>
                     <Typography variant="body2">{rule.raw_rule.risk_score}/100</Typography>
                   </Grid>
                 )}
                 {rule.raw_rule?.max_signals && (
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Typography variant="caption" color="text.secondary">Max Signals</Typography>
                     <Typography variant="body2">{rule.raw_rule.max_signals}</Typography>
                   </Grid>
@@ -428,37 +435,40 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
               
               {filteredTechniques.length > 0 ? (
                 <List dense>
-                  {filteredTechniques.map((technique) => (
-                    <ListItem key={technique.technique_id}>
-                      <ListItemIcon>
-                        <SecurityIcon fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <Link
-                              href={`https://attack.mitre.org/techniques/${technique.technique_id.replace('.', '/')}/`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-                            >
-                              {technique.technique_id}
-                              <OpenInNewIcon fontSize="small" />
-                            </Link>
-                            <Typography variant="body2">{technique.name}</Typography>
-                            {technique.confidence !== undefined && (
-                              <Chip 
-                                label={`${(technique.confidence * 100).toFixed(0)}%`}
-                                size="small"
-                                color={technique.confidence >= 0.8 ? 'success' : 'warning'}
-                              />
-                            )}
-                          </Stack>
-                        }
-                        secondary={technique.description?.substring(0, 200) + '...'}
-                      />
-                    </ListItem>
-                  ))}
+                  {filteredTechniques.map((technique) => {
+                    const techniqueId = getTechniqueId(technique);
+                    return (
+                      <ListItem key={techniqueId}>
+                        <ListItemIcon>
+                          <SecurityIcon fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Link
+                                href={`https://attack.mitre.org/techniques/${techniqueId.replace('.', '/')}/`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                              >
+                                {techniqueId}
+                                <OpenInNewIcon fontSize="small" />
+                              </Link>
+                              <Typography variant="body2">{technique.name}</Typography>
+                              {technique.confidence !== undefined && (
+                                <Chip 
+                                  label={`${(technique.confidence * 100).toFixed(0)}%`}
+                                  size="small"
+                                  color={technique.confidence >= 0.8 ? 'success' : 'warning'}
+                                />
+                              )}
+                            </Stack>
+                          }
+                          secondary={technique.description?.substring(0, 200) + '...'}
+                        />
+                      </ListItem>
+                    );
+                  })}
                 </List>
               ) : (
                 <Typography variant="body2" color="text.secondary">
@@ -489,12 +499,12 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                               {cve.cve_id}
                               <OpenInNewIcon fontSize="small" />
                             </Link>
-                            {cve.cvss_v3_score && (
+                            {(cve.cvss_score || cve.cvss_v3_score) && (
                               <Chip
-                                label={`CVSS ${cve.cvss_v3_score.toFixed(1)}`}
+                                label={`CVSS ${(cve.cvss_score || cve.cvss_v3_score)?.toFixed(1)}`}
                                 size="small"
                                 sx={{
-                                  bgcolor: getCVSSColor(cve.cvss_v3_score),
+                                  bgcolor: getCVSSColor(cve.cvss_score || cve.cvss_v3_score || 0),
                                   color: 'white',
                                 }}
                               />
@@ -516,13 +526,13 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                 <Typography variant="subtitle2" gutterBottom>Threat Intelligence</Typography>
                 <Grid container spacing={2}>
                   {rule.malware_family && (
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                       <Typography variant="caption" color="text.secondary">Malware Family</Typography>
                       <Typography variant="body2">{rule.malware_family}</Typography>
                     </Grid>
                   )}
                   {rule.intrusion_set && (
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                       <Typography variant="caption" color="text.secondary">Intrusion Set</Typography>
                       <Typography variant="body2">{rule.intrusion_set}</Typography>
                     </Grid>
@@ -532,29 +542,31 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
             )}
 
             {/* Enrichment Score */}
-            <Paper sx={{ p: 2 }}>
-              <Typography variant="subtitle2" gutterBottom>Enrichment Quality</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box sx={{ flex: 1 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="body2">Score</Typography>
-                    <Typography variant="body2" fontWeight="bold">
-                      {rule.enrichment_score?.toFixed(0)}%
-                    </Typography>
-                  </Box>
-                  <Box sx={{ height: 8, bgcolor: 'grey.200', borderRadius: 1, overflow: 'hidden' }}>
-                    <Box
-                      sx={{
-                        width: `${rule.enrichment_score || 0}%`,
-                        height: '100%',
-                        bgcolor: rule.enrichment_score >= 80 ? 'success.main' : 
-                                rule.enrichment_score >= 50 ? 'warning.main' : 'error.main',
-                      }}
-                    />
+            {rule.enrichment_score !== undefined && rule.enrichment_score !== null && (
+              <Paper sx={{ p: 2 }}>
+                <Typography variant="subtitle2" gutterBottom>Enrichment Quality</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Box sx={{ flex: 1 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                      <Typography variant="body2">Score</Typography>
+                      <Typography variant="body2" fontWeight="bold">
+                        {rule.enrichment_score.toFixed(0)}%
+                      </Typography>
+                    </Box>
+                    <Box sx={{ height: 8, bgcolor: 'grey.200', borderRadius: 1, overflow: 'hidden' }}>
+                      <Box
+                        sx={{
+                          width: `${rule.enrichment_score}%`,
+                          height: '100%',
+                          bgcolor: rule.enrichment_score >= 80 ? 'success.main' : 
+                                  rule.enrichment_score >= 50 ? 'warning.main' : 'error.main',
+                        }}
+                      />
+                    </Box>
                   </Box>
                 </Box>
-              </Box>
-            </Paper>
+              </Paper>
+            )}
           </Stack>
         </TabPanel>
 

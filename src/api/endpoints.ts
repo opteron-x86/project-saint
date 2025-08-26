@@ -76,7 +76,7 @@ const buildQueryParams = (
     if (filters.rule_sources && filters.rule_sources.length > 0) {
       params.rule_sources = filters.rule_sources.join(',');
     } else if (filters.rule_source && filters.rule_source.length > 0) {
-      params.rule_sources = filters.rule_source.join(','); // Map to plural
+      params.rule_sources = filters.rule_source.join(',');
     }
     
     // Array filters - convert to comma-separated strings
@@ -93,10 +93,12 @@ const buildQueryParams = (
       }
     });
     
-    // Boolean filters
+    // Boolean filters - handle compatibility fields
     if (filters.has_mitre !== undefined) params.has_mitre = filters.has_mitre;
     if (filters.has_cves !== undefined) params.has_cves = filters.has_cves;
     if (filters.is_active !== undefined) params.is_active = filters.is_active;
+    
+    // Handle backward compatibility for has_mitre_mapping and has_cve_references
     if (filters.has_mitre_mapping !== undefined) params.has_mitre = filters.has_mitre_mapping;
     if (filters.has_cve_references !== undefined) params.has_cves = filters.has_cve_references;
     
@@ -109,6 +111,11 @@ const buildQueryParams = (
     // Enrichment score filter
     if (filters.enrichment_score_min !== undefined) {
       params.enrichment_score_min = filters.enrichment_score_min;
+    }
+    
+    // Validation status
+    if (filters.validation_status && filters.validation_status.length > 0) {
+      params.validation_status = filters.validation_status.join(',');
     }
   }
   
@@ -256,21 +263,24 @@ export const fetchRuleStats = async (
  * Export rules
  */
 export const exportRules = async (options: ExportOptions): Promise<ExportResponse> => {
-  const params = {
+  const payload = {
     format: options.format,
-    include_enrichments: options.include_enrichments,
-    include_raw_content: options.include_raw_content,
-    ...buildQueryParams(undefined, options.filters)
+    include_enrichments: options.include_enrichments ?? true,
+    include_raw_content: options.include_raw_content ?? false,
+    filters: options.filters,
   };
   
-  const response = await apiPost<any>(ENDPOINTS.RULES_EXPORT, params);
+  const response = await apiPost<any>('/rules/export', payload);
   
+  // Ensure the response matches ExportResponse interface
   return {
     file_url: response.file_url,
-    download_url: response.download_url || response.file_url,
+    download_url: response.download_url,
     content: response.content,
-    filename: response.filename,
-    format: response.format || options.format
+    filename: response.filename || `rules_export.${options.format}`,
+    format: response.format || options.format,
+    rules_count: response.rules_count || 0,
+    created_at: response.created_at || new Date().toISOString(),
   };
 };
 
@@ -279,11 +289,9 @@ export const exportRules = async (options: ExportOptions): Promise<ExportRespons
 /**
  * Fetch MITRE matrix data
  */
-export const fetchMitreMatrix = async (
-  platforms?: string[]
-): Promise<MitreMatrixData> => {
+export const fetchMitreMatrix = async (platforms?: string[]): Promise<MitreMatrixData> => {
   const params = platforms?.length ? { platforms: platforms.join(',') } : {};
-  return await apiGet<MitreMatrixData>(ENDPOINTS.MITRE_MATRIX, params);
+  return await apiGet<MitreMatrixData>('/mitre/matrix', params);
 };
 
 /**
@@ -316,19 +324,26 @@ export const fetchMitreCoverage = async (
  * Fetch MITRE techniques
  */
 export const fetchMitreTechniques = async (
-  tacticId?: string,
-  platforms?: string[]
-): Promise<MitreTechnique[]> => {
+  pagination?: PaginationParams,
+  search?: string
+): Promise<{ techniques: MitreTechnique[]; total: number }> => {
   const params: Record<string, any> = {};
-  if (tacticId) params.tactic_id = tacticId;
-  if (platforms?.length) params.platforms = platforms.join(',');
   
-  const response = await apiGet<{ techniques: MitreTechnique[] }>(
-    ENDPOINTS.MITRE_TECHNIQUES,
-    params
-  );
+  if (pagination) {
+    params.offset = (pagination.page - 1) * pagination.limit;
+    params.limit = pagination.limit;
+  }
   
-  return response.techniques || [];
+  if (search) {
+    params.search = search;
+  }
+  
+  const response = await apiGet<any>('/mitre/techniques', params);
+  
+  return {
+    techniques: response.techniques || [],
+    total: response.total || 0
+  };
 };
 
 // --- CVE ENDPOINTS ---
@@ -385,7 +400,7 @@ export const fetchCveStats = async (): Promise<CveStats> => {
  * Fetch filter options
  */
 export const fetchFilterOptions = async (): Promise<FilterOptionsResponse> => {
-  const response = await apiGet<any>(ENDPOINTS.FILTERS_OPTIONS);
+  const response = await apiGet<any>('/filters/options');
   
   // Ensure all expected fields are present
   return {
@@ -461,8 +476,27 @@ export const fetchTrendData = async (
  * Fetch MITRE technique coverage data
  * Alias for fetchMitreCoverage for backward compatibility
  */
-export const fetchTechniqueCoverage = fetchMitreCoverage;
-
+export const fetchTechniqueCoverage = async (
+  platform?: string | null,
+  rulePlatform?: string | null
+): Promise<TechniquesCoverageResponse> => {
+  const params: Record<string, any> = {};
+  if (platform) params.platform = platform;
+  if (rulePlatform) params.rule_platform = rulePlatform;
+  
+  const response = await apiGet<any>('/mitre/coverage', params);
+  
+  return {
+    total_techniques: response.total_techniques || 0,
+    covered_techniques: response.covered_techniques || 0,
+    coverage_percentage: response.coverage_percentage || 0,
+    techniques: response.techniques || [],
+    platform_filter_applied: response.platform_filter_applied,
+    rule_platform_filter_applied: response.rule_platform_filter_applied,
+    coverage_gaps: response.coverage_gaps,
+    metadata: response.metadata
+  };
+};
 /**
  * Fetch rule enrichment statistics
  */

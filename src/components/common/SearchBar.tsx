@@ -61,7 +61,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
 }) => {
   const isControlled = controlledValue !== undefined;
   const [internalValue, setInternalValue] = useState('');
-  const debounceTimerRef = useRef<NodeJS.Timeout>();
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Use controlled value if provided, otherwise use internal state
   const searchValue = isControlled ? controlledValue : internalValue;
