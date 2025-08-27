@@ -19,6 +19,9 @@ import {
   alpha,
   ToggleButton,
   ToggleButtonGroup,
+  Fade,
+  FormControl,
+  TextField,
 } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 
@@ -36,6 +39,7 @@ import FirstPageIcon from '@mui/icons-material/FirstPage';
 import LastPageIcon from '@mui/icons-material/LastPage';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 
 // API and Types
 import { RuleSummary } from '@/api/types';
@@ -60,6 +64,7 @@ const HEADER_HEIGHT = 96;
 
 type ViewMode = 'table' | 'grid';
 
+
 interface PaginationControlsProps {
   currentPage: number;
   totalPages: number;
@@ -69,6 +74,7 @@ interface PaginationControlsProps {
   onPageSizeChange: (size: number) => void;
   disabled?: boolean;
 }
+
 
 const PaginationControls: React.FC<PaginationControlsProps> = ({
   currentPage,
@@ -81,91 +87,299 @@ const PaginationControls: React.FC<PaginationControlsProps> = ({
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  
+  const [pageInput, setPageInput] = useState<string>(currentPage.toString());
+  const [isEditingPage, setIsEditingPage] = useState(false);
   
   const startIndex = (currentPage - 1) * pageSize + 1;
   const endIndex = Math.min(currentPage * pageSize, totalRules);
   
+  // Generate page number buttons for desktop view
+  const getPageNumbers = useCallback(() => {
+    const pages: (number | string)[] = [];
+    const maxButtons = isMobile ? 3 : isTablet ? 5 : 7;
+    const halfRange = Math.floor((maxButtons - 1) / 2);
+    
+    if (totalPages <= maxButtons) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      pages.push(1);
+      
+      let start = Math.max(2, currentPage - halfRange);
+      let end = Math.min(totalPages - 1, currentPage + halfRange);
+      
+      if (currentPage <= halfRange + 1) {
+        end = maxButtons - 1;
+      } else if (currentPage >= totalPages - halfRange) {
+        start = totalPages - maxButtons + 2;
+      }
+      
+      if (start > 2) pages.push('...');
+      
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+      
+      if (end < totalPages - 1) pages.push('...');
+      
+      if (totalPages > 1) pages.push(totalPages);
+    }
+    
+    return pages;
+  }, [currentPage, totalPages, isMobile, isTablet]);
+  
+  const handlePageInputSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const pageNum = parseInt(pageInput, 10);
+    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+      onPageChange(pageNum);
+      setIsEditingPage(false);
+    } else {
+      setPageInput(currentPage.toString());
+      setIsEditingPage(false);
+    }
+  };
+  
+  const handlePageInputKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      setPageInput(currentPage.toString());
+      setIsEditingPage(false);
+    }
+  };
+  
   return (
-    <Stack
-      direction="row"
-      spacing={2}
-      alignItems="center"
+    <Box
       sx={{
-        px: 2,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        px: { xs: 1, sm: 2 },
         py: 1,
         borderTop: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
-        backgroundColor: alpha(theme.palette.background.default, 0.4),
+        backgroundColor: theme.palette.mode === 'dark' 
+          ? alpha(theme.palette.background.paper, 0.6)
+          : alpha(theme.palette.background.default, 0.8),
+        backdropFilter: 'blur(8px)',
       }}
     >
-      {/* Results info */}
-      <Typography variant="body2" color="text.secondary" sx={{ minWidth: 120 }}>
-        {totalRules > 0 ? `${startIndex}–${endIndex} of ${totalRules}` : 'No results'}
+      {/* Left side - Results info */}
+      <Typography 
+        variant="body2" 
+        color="text.secondary"
+        sx={{ 
+          minWidth: { xs: 80, sm: 120 },
+          fontSize: { xs: '0.75rem', sm: '0.875rem' }
+        }}
+      >
+        {totalRules > 0 
+          ? `${startIndex.toLocaleString()}–${endIndex.toLocaleString()} of ${totalRules.toLocaleString()}`
+          : 'No results'}
       </Typography>
       
-      <Box sx={{ flex: 1 }} />
-      
-      {/* Page size selector */}
+      {/* Center - Page size selector (hidden on mobile) */}
       {!isMobile && (
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Typography variant="body2" color="text.secondary">
-            Rows per page:
-          </Typography>
-          <Select
-            value={pageSize}
-            onChange={(e: SelectChangeEvent<number>) => onPageSizeChange(Number(e.target.value))}
-            size="small"
-            disabled={disabled}
-            sx={{
-              minWidth: 70,
-              '& .MuiSelect-select': { py: 0.5 },
-            }}
-          >
-            {[10, 25, 50, 100].map((size) => (
-              <MenuItem key={size} value={size}>
-                {size}
-              </MenuItem>
-            ))}
-          </Select>
-        </Stack>
+        <Fade in>
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Typography variant="body2" color="text.secondary">
+                Rows:
+              </Typography>
+              <Select
+                value={pageSize}
+                onChange={(e: SelectChangeEvent<number>) => onPageSizeChange(Number(e.target.value))}
+                disabled={disabled}
+                IconComponent={KeyboardArrowDownIcon}
+                sx={{
+                  minWidth: 70,
+                  '& .MuiSelect-select': { 
+                    py: 0.5,
+                    pr: 3,
+                  },
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: alpha(theme.palette.divider, 0.2),
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: theme.palette.primary.main,
+                  },
+                }}
+              >
+                {[10, 25, 50, 100].map((size) => (
+                  <MenuItem key={size} value={size}>
+                    {size}
+                  </MenuItem>
+                ))}
+              </Select>
+            </Stack>
+          </FormControl>
+        </Fade>
       )}
       
-      {/* Page navigation */}
+      {/* Right side - Page navigation */}
       <Stack direction="row" spacing={0.5} alignItems="center">
-        <IconButton
-          size="small"
-          onClick={() => onPageChange(1)}
-          disabled={disabled || currentPage === 1}
-        >
-          <FirstPageIcon fontSize="small" />
-        </IconButton>
-        <IconButton
-          size="small"
-          onClick={() => onPageChange(currentPage - 1)}
-          disabled={disabled || currentPage === 1}
-        >
-          <NavigateBeforeIcon fontSize="small" />
-        </IconButton>
+        {/* First & Previous buttons */}
+        <Tooltip title="First page">
+          <span>
+            <IconButton
+              size="small"
+              onClick={() => onPageChange(1)}
+              disabled={disabled || currentPage === 1}
+              sx={{
+                '&:hover': {
+                  backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                },
+              }}
+            >
+              <FirstPageIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
         
-        <Typography variant="body2" sx={{ mx: 1, minWidth: 60, textAlign: 'center' }}>
-          {currentPage} / {totalPages || 1}
-        </Typography>
+        <Tooltip title="Previous page">
+          <span>
+            <IconButton
+              size="small"
+              onClick={() => onPageChange(currentPage - 1)}
+              disabled={disabled || currentPage === 1}
+              sx={{
+                '&:hover': {
+                  backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                },
+              }}
+            >
+              <NavigateBeforeIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
         
-        <IconButton
-          size="small"
-          onClick={() => onPageChange(currentPage + 1)}
-          disabled={disabled || currentPage >= totalPages}
-        >
-          <NavigateNextIcon fontSize="small" />
-        </IconButton>
-        <IconButton
-          size="small"
-          onClick={() => onPageChange(totalPages)}
-          disabled={disabled || currentPage >= totalPages}
-        >
-          <LastPageIcon fontSize="small" />
-        </IconButton>
+        {/* Page number display/input */}
+        {isMobile ? (
+          // Mobile: Compact page indicator
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              mx: 1, 
+              minWidth: 60, 
+              textAlign: 'center',
+              fontWeight: 500,
+            }}
+          >
+            {currentPage} / {totalPages || 1}
+          </Typography>
+        ) : (
+          // Desktop: Page number buttons or input field
+          <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mx: 1 }}>
+            {!isEditingPage && !isTablet ? (
+              // Desktop: Show page number buttons
+              getPageNumbers().map((pageNum, index) => (
+                pageNum === '...' ? (
+                  <Typography key={`ellipsis-${index}`} variant="body2" sx={{ px: 0.5 }}>
+                    …
+                  </Typography>
+                ) : (
+                  <IconButton
+                    key={pageNum}
+                    size="small"
+                    onClick={() => onPageChange(pageNum as number)}
+                    disabled={disabled || pageNum === currentPage}
+                    sx={{
+                      minWidth: 32,
+                      fontWeight: pageNum === currentPage ? 600 : 400,
+                      color: pageNum === currentPage 
+                        ? theme.palette.primary.main 
+                        : theme.palette.text.secondary,
+                      backgroundColor: pageNum === currentPage 
+                        ? alpha(theme.palette.primary.main, 0.08)
+                        : 'transparent',
+                      '&:hover': {
+                        backgroundColor: alpha(theme.palette.primary.main, 0.12),
+                      },
+                    }}
+                  >
+                    {pageNum}
+                  </IconButton>
+                )
+              ))
+            ) : (
+              // Tablet or editing mode: Show input field
+              <Box
+                component="form"
+                onSubmit={handlePageInputSubmit}
+                sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+              >
+                <TextField
+                  size="small"
+                  value={pageInput}
+                  onChange={(e) => setPageInput(e.target.value)}
+                  onFocus={() => setIsEditingPage(true)}
+                  onBlur={handlePageInputSubmit}
+                  onKeyDown={handlePageInputKeyDown}
+                  disabled={disabled}
+                  inputProps={{
+                    style: { 
+                      width: '3em', 
+                      textAlign: 'center',
+                      padding: '4px 8px',
+                    },
+                    'aria-label': 'Page number',
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '& fieldset': {
+                        borderColor: alpha(theme.palette.divider, 0.2),
+                      },
+                      '&:hover fieldset': {
+                        borderColor: theme.palette.primary.main,
+                      },
+                    },
+                  }}
+                />
+                <Typography variant="body2" color="text.secondary">
+                  / {totalPages || 1}
+                </Typography>
+              </Box>
+            )}
+          </Stack>
+        )}
+        
+        {/* Next & Last buttons */}
+        <Tooltip title="Next page">
+          <span>
+            <IconButton
+              size="small"
+              onClick={() => onPageChange(currentPage + 1)}
+              disabled={disabled || currentPage >= totalPages}
+              sx={{
+                '&:hover': {
+                  backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                },
+              }}
+            >
+              <NavigateNextIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        
+        <Tooltip title="Last page">
+          <span>
+            <IconButton
+              size="small"
+              onClick={() => onPageChange(totalPages)}
+              disabled={disabled || currentPage >= totalPages}
+              sx={{
+                '&:hover': {
+                  backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                },
+              }}
+            >
+              <LastPageIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
       </Stack>
-    </Stack>
+    </Box>
   );
 };
 

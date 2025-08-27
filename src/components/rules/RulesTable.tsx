@@ -200,17 +200,6 @@ const RulesTable: React.FC<RulesTableProps> = ({
     [onRuleSelect]
   );
 
-  // Handle pagination model change
-  const handlePaginationModelChange = useCallback(
-    (model: GridPaginationModel) => {
-      if (model.page !== currentPage) {
-        onPaginationChange(model.page, model.pageSize);
-      } else if (model.pageSize !== pageSize) {
-        onPaginationChange(currentPage, model.pageSize);
-      }
-    },
-    [currentPage, pageSize, onPaginationChange]
-  );
 
   return (
     <Box sx={{ width: '100%', height: '100%' }}>
@@ -219,10 +208,16 @@ const RulesTable: React.FC<RulesTableProps> = ({
         columns={columns}
         loading={isLoading}
         rowCount={totalRules}
-        pageSizeOptions={[10, 25, 50, 100]}
-        paginationMode="server"
-        paginationModel={{ page: currentPage, pageSize }}
-        onPaginationModelChange={handlePaginationModelChange}
+        
+        // pageSizeOptions={[10, 25, 50, 100]}
+        // paginationMode="server"
+        // paginationModel={{ page: currentPage, pageSize }}
+        // onPaginationModelChange={handlePaginationModelChange}
+        
+        //  HIDE PAGINATION:
+        hideFooterPagination
+        hideFooter // This completely hides the footer including pagination
+        
         sortingMode="server"
         sortModel={sortModel}
         onSortModelChange={onSortChange}
@@ -241,9 +236,10 @@ const RulesTable: React.FC<RulesTableProps> = ({
             backgroundColor: theme.palette.background.default,
             borderBottom: `2px solid ${theme.palette.divider}`,
           },
-          '& .MuiDataGrid-footerContainer': {
-            borderTop: `2px solid ${theme.palette.divider}`,
-          },
+          // REMOVE THIS SINCE FOOTER IS HIDDEN:
+          // '& .MuiDataGrid-footerContainer': {
+          //   borderTop: `2px solid ${theme.palette.divider}`,
+          // },
           '& .MuiDataGrid-row': {
             cursor: 'pointer',
             '&:hover': {
