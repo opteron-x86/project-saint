@@ -26,6 +26,7 @@ import {
   ListItemText,
   useTheme,
   useMediaQuery,
+  alpha,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
@@ -402,43 +403,92 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
           <Stack spacing={2}>
             {/* MITRE ATT&CK */}
             <Paper sx={{ p: 2 }}>
-              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-                <Typography variant="subtitle2">MITRE ATT&CK Techniques</Typography>
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <FormControlLabel
-                    control={
-                      <Switch 
-                        checked={showAllTechniques}
-                        onChange={(e) => setShowAllTechniques(e.target.checked)}
-                      />
-                    }
-                    label="Show All"
-                  />
-                  {!showAllTechniques && (
-                    <Box sx={{ width: 200 }}>
-                      <Typography variant="caption">
-                        Confidence: {confidenceThreshold.toFixed(1)}
-                      </Typography>
-                      <Slider
-                        value={confidenceThreshold}
-                        onChange={(_, v) => setConfidenceThreshold(v as number)}
-                        min={0}
-                        max={1}
-                        step={0.1}
-                        marks
-                        size="small"
-                      />
-                    </Box>
-                  )}
-                </Stack>
-              </Stack>
+              <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                MITRE ATT&CK Techniques
+              </Typography>
               
+              {/* Redesigned controls section */}
+              <Box sx={{ 
+                mb: 3, 
+                p: 2, 
+                bgcolor: alpha(theme.palette.primary.main, 0.04),
+                borderRadius: 1,
+                border: `1px solid ${alpha(theme.palette.primary.main, 0.08)}`
+              }}>
+                <Stack spacing={2}>
+                  {/* Confidence Slider - Always visible */}
+                  <Box>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                      <Typography variant="body2" color={showAllTechniques ? "text.disabled" : "text.primary"}>
+                        Confidence Threshold: {confidenceThreshold.toFixed(1)}
+                      </Typography>
+                      <Chip 
+                        label={`${filteredTechniques.length} techniques`}
+                        size="small"
+                        color={showAllTechniques ? "default" : "primary"}
+                        variant="outlined"
+                      />
+                    </Stack>
+                    <Slider
+                      value={confidenceThreshold}
+                      onChange={(_, v) => setConfidenceThreshold(v as number)}
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      marks={[
+                        { value: 0, label: '0' },
+                        { value: 0.5, label: '0.5' },
+                        { value: 1, label: '1.0' }
+                      ]}
+                      size="small"
+                      disabled={showAllTechniques}
+                      sx={{ 
+                        opacity: showAllTechniques ? 0.5 : 1,
+                        '& .MuiSlider-markLabel': {
+                          fontSize: '0.75rem'
+                        }
+                      }}
+                    />
+                  </Box>
+                  
+                  {/* Show All toggle - repositioned below slider */}
+                  <Stack direction="row" alignItems="center" justifyContent="space-between">
+                    <FormControlLabel
+                      control={
+                        <Switch 
+                          checked={showAllTechniques}
+                          onChange={(e) => setShowAllTechniques(e.target.checked)}
+                          color="primary"
+                        />
+                      }
+                      label={
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography variant="body2">Show All Techniques</Typography>
+                          <Tooltip title="When enabled, displays all techniques regardless of confidence score">
+                            <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                          </Tooltip>
+                        </Stack>
+                      }
+                    />
+                    {!showAllTechniques && (
+                      <Typography variant="caption" color="text.secondary">
+                        Filtering by confidence ≥ {confidenceThreshold.toFixed(1)}
+                      </Typography>
+                    )}
+                  </Stack>
+                </Stack>
+              </Box>
+              
+              {/* Techniques List */}
               {filteredTechniques.length > 0 ? (
                 <List dense>
                   {filteredTechniques.map((technique) => {
                     const techniqueId = getTechniqueId(technique);
                     return (
-                      <ListItem key={techniqueId}>
+                      <ListItem key={techniqueId} sx={{ 
+                        opacity: showAllTechniques && (technique.confidence ?? 0) < confidenceThreshold ? 0.6 : 1,
+                        transition: 'opacity 0.2s ease-in-out'
+                      }}>
                         <ListItemIcon>
                           <SecurityIcon fontSize="small" />
                         </ListItemIcon>
@@ -452,28 +502,35 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                                 sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
                               >
                                 {techniqueId}
-                                <OpenInNewIcon fontSize="small" />
+                                <OpenInNewIcon sx={{ fontSize: 14 }} />
                               </Link>
                               <Typography variant="body2">{technique.name}</Typography>
-                              {technique.confidence !== undefined && (
-                                <Chip 
-                                  label={`${(technique.confidence * 100).toFixed(0)}%`}
-                                  size="small"
-                                  color={technique.confidence >= 0.8 ? 'success' : 'warning'}
-                                />
-                              )}
+                              <Chip
+                                label={`${((technique.confidence ?? 0) * 100).toFixed(0)}%`}
+                                size="small"
+                                color={
+                                  (technique.confidence ?? 0) >= 0.8 ? 'success' :
+                                  (technique.confidence ?? 0) >= 0.5 ? 'warning' : 'default'
+                                }
+                                variant="outlined"
+                              />
                             </Stack>
                           }
-                          secondary={technique.description?.substring(0, 200) + '...'}
+                          secondary={technique.tactics?.join(', ')}
                         />
                       </ListItem>
                     );
                   })}
                 </List>
               ) : (
-                <Typography variant="body2" color="text.secondary">
-                  No techniques found{!showAllTechniques && ' at this confidence level'}
-                </Typography>
+                <Box sx={{ py: 3, textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {showAllTechniques ? 
+                      'No MITRE techniques found' : 
+                      `No techniques with confidence ≥ ${confidenceThreshold.toFixed(1)}`
+                    }
+                  </Typography>
+                </Box>
               )}
             </Paper>
 
