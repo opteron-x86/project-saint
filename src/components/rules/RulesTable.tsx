@@ -209,9 +209,9 @@ const RulesTable: React.FC<RulesTableProps> = ({
         loading={isLoading}
         rowCount={totalRules}
         
-        // pageSizeOptions={[10, 25, 50, 100]}
-        // paginationMode="server"
-        // paginationModel={{ page: currentPage, pageSize }}
+        pageSizeOptions={[10, 25, 50, 100]}
+        paginationMode="server"
+        paginationModel={{ page: currentPage, pageSize }}
         // onPaginationModelChange={handlePaginationModelChange}
         
         //  HIDE PAGINATION:

@@ -129,9 +129,17 @@ const darkThemeOverrides: ThemeOptions = {
     },
     text: {
       primary: tokens.grey[50],
-      secondary: tokens.grey[300],
+      secondary: tokens.grey[300], // Keep this or make it lighter: tokens.grey[200]
     },
     divider: alpha(tokens.grey[500], 0.2),
+    // Add action colors for better icon visibility
+    action: {
+      active: tokens.grey[200],        // Active icons/buttons
+      hover: alpha(tokens.grey[200], 0.08),
+      selected: alpha(tokens.grey[200], 0.16),
+      disabled: alpha(tokens.grey[200], 0.3),
+      disabledBackground: alpha(tokens.grey[200], 0.12),
+    },
   },
   components: {
     MuiCssBaseline: {
@@ -146,6 +154,130 @@ const darkThemeOverrides: ThemeOptions = {
         },
       },
     },
+    // Fix IconButton visibility in dark mode
+    MuiIconButton: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          color: theme.palette.mode === 'dark' ? tokens.grey[200] : 'inherit',
+          '&:hover': {
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? alpha(tokens.grey[200], 0.08) 
+              : alpha(theme.palette.action.active, 0.04),
+          },
+          '&.Mui-disabled': {
+            color: theme.palette.mode === 'dark' 
+              ? alpha(tokens.grey[200], 0.3) 
+              : alpha(theme.palette.action.disabled, 0.26),
+          },
+        }),
+      },
+    },
+    // Fix ToggleButton visibility in dark mode
+    MuiToggleButton: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          color: theme.palette.mode === 'dark' ? tokens.grey[300] : theme.palette.text.primary,
+          borderColor: theme.palette.mode === 'dark' 
+            ? alpha(tokens.grey[500], 0.3) 
+            : alpha(theme.palette.divider, 0.12),
+          '&:hover': {
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? alpha(tokens.grey[200], 0.08) 
+              : alpha(theme.palette.action.active, 0.04),
+          },
+          '&.Mui-selected': {
+            color: theme.palette.mode === 'dark' 
+              ? tokens.blue[300] 
+              : theme.palette.primary.main,
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? alpha(tokens.blue[700], 0.3) 
+              : alpha(theme.palette.primary.main, 0.08),
+            '&:hover': {
+              backgroundColor: theme.palette.mode === 'dark' 
+                ? alpha(tokens.blue[700], 0.4) 
+                : alpha(theme.palette.primary.main, 0.12),
+            },
+          },
+          '&.Mui-disabled': {
+            color: theme.palette.mode === 'dark' 
+              ? alpha(tokens.grey[300], 0.3) 
+              : alpha(theme.palette.text.primary, 0.26),
+            borderColor: theme.palette.mode === 'dark' 
+              ? alpha(tokens.grey[500], 0.15) 
+              : alpha(theme.palette.divider, 0.06),
+          },
+        }),
+      },
+    },
+    // Fix ToggleButtonGroup visibility
+    MuiToggleButtonGroup: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          '& .MuiToggleButtonGroup-grouped': {
+            borderColor: theme.palette.mode === 'dark' 
+              ? alpha(tokens.grey[500], 0.3) 
+              : alpha(theme.palette.divider, 0.12),
+          },
+        }),
+      },
+    },
+    // Improve SvgIcon visibility (affects all MUI icons)
+    MuiSvgIcon: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          color: 'inherit', // Inherit from parent to respect IconButton colors
+        }),
+        fontSizeSmall: {
+          fontSize: '1.25rem',
+        },
+      },
+    },
+    // Fix Select component visibility in dark mode
+    MuiSelect: {
+      styleOverrides: {
+        icon: ({ theme }) => ({
+          color: theme.palette.mode === 'dark' 
+            ? tokens.grey[300] 
+            : theme.palette.action.active,
+        }),
+      },
+    },
+    // Fix TextField/Input visibility in dark mode
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          '& .MuiOutlinedInput-notchedOutline': {
+            borderColor: theme.palette.mode === 'dark' 
+              ? alpha(tokens.grey[500], 0.3) 
+              : alpha(theme.palette.divider, 0.23),
+          },
+          '&:hover .MuiOutlinedInput-notchedOutline': {
+            borderColor: theme.palette.mode === 'dark' 
+              ? alpha(tokens.grey[400], 0.5) 
+              : theme.palette.text.primary,
+          },
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+            borderColor: theme.palette.mode === 'dark' 
+              ? theme.palette.primary.light 
+              : theme.palette.primary.main,
+          },
+          '&.Mui-disabled .MuiOutlinedInput-notchedOutline': {
+            borderColor: theme.palette.mode === 'dark' 
+              ? alpha(tokens.grey[500], 0.15) 
+              : alpha(theme.palette.divider, 0.06),
+          },
+        }),
+        input: ({ theme }) => ({
+          '&::placeholder': {
+            color: theme.palette.mode === 'dark' 
+              ? alpha(tokens.grey[300], 0.5) 
+              : alpha(theme.palette.text.secondary, 0.5),
+            opacity: 1,
+          },
+        }),
+      },
+    },
+    // Existing Card component
     MuiCard: {
       styleOverrides: {
         root: { 
@@ -154,6 +286,7 @@ const darkThemeOverrides: ThemeOptions = {
         },
       },
     },
+    // Existing ListItemButton component
     MuiListItemButton: {
       styleOverrides: {
         root: { 
@@ -165,6 +298,44 @@ const darkThemeOverrides: ThemeOptions = {
             },
           },
         },
+      },
+    },
+    // Fix Tooltip visibility in dark mode
+    MuiTooltip: {
+      styleOverrides: {
+        tooltip: ({ theme }) => ({
+          backgroundColor: theme.palette.mode === 'dark' 
+            ? tokens.grey[700] 
+            : alpha(tokens.grey[900], 0.92),
+          color: theme.palette.mode === 'dark' 
+            ? tokens.grey[100] 
+            : tokens.grey[50],
+        }),
+        arrow: ({ theme }) => ({
+          color: theme.palette.mode === 'dark' 
+            ? tokens.grey[700] 
+            : alpha(tokens.grey[900], 0.92),
+        }),
+      },
+    },
+    // Fix Chip visibility in dark mode
+    MuiChip: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          borderColor: theme.palette.mode === 'dark' 
+            ? alpha(tokens.grey[500], 0.3) 
+            : alpha(theme.palette.divider, 0.12),
+        }),
+        outlined: ({ theme }) => ({
+          color: theme.palette.mode === 'dark' 
+            ? tokens.grey[300] 
+            : theme.palette.text.primary,
+          '& .MuiChip-icon': {
+            color: theme.palette.mode === 'dark' 
+              ? tokens.grey[400] 
+              : theme.palette.action.active,
+          },
+        }),
       },
     },
   },

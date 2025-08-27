@@ -185,7 +185,7 @@ const PaginationControls: React.FC<PaginationControlsProps> = ({
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <Stack direction="row" spacing={1} alignItems="center">
               <Typography variant="body2" color="text.secondary">
-                Rows:
+                Rules:
               </Typography>
               <Select
                 value={pageSize}
