@@ -150,7 +150,7 @@ const AttackMatrix: React.FC = () => {
   }, []);
 
   const handleViewRules = useCallback((techniqueId: string) => {
-    navigate(`/rules?mitre=${techniqueId}`);
+    navigate(`/rules?search=${encodeURIComponent(techniqueId)}`);
   }, [navigate]);
 
   const getCellColor = useCallback((techniqueId: string): string => {

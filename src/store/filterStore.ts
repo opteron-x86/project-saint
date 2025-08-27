@@ -5,7 +5,6 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { RuleFilters, FilterOption, FilterOptionsResponse } from '@/api/types';
 import { fetchFilterOptions } from '@/api/endpoints';
 
-// Define the filter store state interface
 interface FilterState {
   filters: RuleFilters;
 
@@ -27,6 +26,8 @@ interface FilterState {
   setTactics: (tactics: string[]) => void;
   setRuleSources: (sources: string[]) => void;
   setRulePlatforms: (platforms: string[]) => void;
+  setMitreTechniques: (techniques: string[]) => void;
+  setTags: (tags: string[]) => void;
 
   clearFilters: () => void;
   fetchAllFilterOptions: () => Promise<void>;
@@ -43,6 +44,7 @@ const initialFilters: RuleFilters = {
   tags: [],
   dateRange: null,
   rule_platform: [],
+  mitre_techniques: [],
 };
 
 export const useFilterStore = create<FilterState>()(
@@ -65,6 +67,8 @@ export const useFilterStore = create<FilterState>()(
       setTactics: (tactics) => set((state) => ({ filters: { ...state.filters, tactics } })),
       setRuleSources: (rule_source) => set((state) => ({ filters: { ...state.filters, rule_source } })),
       setRulePlatforms: (rule_platform) => set((state) => ({ filters: { ...state.filters, rule_platform } })),
+      setMitreTechniques: (mitre_techniques) => set((state) => ({ filters: { ...state.filters, mitre_techniques } })),
+      setTags: (tags) => set((state) => ({ filters: { ...state.filters, tags } })),
       
       clearFilters: () => set({ filters: { ...initialFilters } }),
 
@@ -88,7 +92,7 @@ export const useFilterStore = create<FilterState>()(
       },
     }),
     {
-      name: 'saint-ex-filters-v4', // Increment version for new filter state
+      name: 'saint-ex-filters-v5', // Increment version for new filter state
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({ filters: state.filters }),
     }

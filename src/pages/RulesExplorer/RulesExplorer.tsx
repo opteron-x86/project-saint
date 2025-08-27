@@ -63,12 +63,20 @@ export const useSearchParamHandler = () => {
   
   useEffect(() => {
     const searchQuery = searchParams.get('search');
+    const mitreQuery = searchParams.get('mitre'); // Maintain backward compatibility
+    
     if (searchQuery) {
-      // Apply the search term to the filter store
+      // Apply search term from URL (includes technique IDs from AttackMatrix)
       setSearchTerm(searchQuery);
       
-      // Remove the search parameter from URL to prevent re-application
+      // Clean up URL after applying
       searchParams.delete('search');
+      setSearchParams(searchParams, { replace: true });
+    } else if (mitreQuery) {
+      // Handle legacy mitre parameter if it exists
+      setSearchTerm(mitreQuery);
+      
+      searchParams.delete('mitre');
       setSearchParams(searchParams, { replace: true });
     }
   }, []); // Run once on mount
@@ -425,7 +433,7 @@ const RulesExplorer: React.FC = () => {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
-
+  useSearchParamHandler();
   // Main data hook
   const {
     rules: fetchedRules,
