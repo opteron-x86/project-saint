@@ -23,7 +23,7 @@ import {
   FormControl,
   TextField,
 } from '@mui/material';
-import { Link as RouterLink, useLocation } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useSearchParams  } from 'react-router-dom';
 
 // Icons
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -53,9 +53,26 @@ import VirtualizedRuleGrid from '@/components/rules/VirtualizedRuleGrid';
 // Hooks and Utils
 import usePaginatedRules from '@/hooks/data/usePaginatedRules';
 import useRuleBookmarks from '@/hooks/data/useRuleBookmarks';
-import { useRuleStore } from '@/store';
+import { useRuleStore, useFilterStore } from '@/store';
 import { useRuleQuery } from '@/api/queries';
 import { formatDate } from '@/utils/format';
+
+export const useSearchParamHandler = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const setSearchTerm = useFilterStore((state) => state.setSearchTerm);
+  
+  useEffect(() => {
+    const searchQuery = searchParams.get('search');
+    if (searchQuery) {
+      // Apply the search term to the filter store
+      setSearchTerm(searchQuery);
+      
+      // Remove the search parameter from URL to prevent re-application
+      searchParams.delete('search');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, []); // Run once on mount
+};
 
 // Lazy Components
 const LazyRuleDetail = lazy(() => import('@/components/rules/RuleDetail'));
@@ -387,6 +404,7 @@ const RulesExplorer: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const location = useLocation();
+  
 
   // Store hooks
   const { selectRule: setSelectedRuleInStore } = useRuleStore();
@@ -763,5 +781,6 @@ const RulesExplorer: React.FC = () => {
     </Box>
   );
 };
+
 
 export default RulesExplorer;

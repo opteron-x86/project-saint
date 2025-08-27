@@ -53,6 +53,7 @@ const Sidebar: React.FC<SidebarProps> = ({ width, variant, collapsed }) => {
     // { path: '/saved', label: 'Saved Items', icon: <BookmarkIcon /> },
     // { path: '/settings', label: 'Settings', icon: <SettingsIcon /> },
     // { path: '/help', label: 'Help & Support', icon: <HelpIcon /> },
+    { path: '#', label: 'v0.1.1-alpha.2.250827', icon: <SettingsIcon /> },
   ];
 
   const handleNavigation = (path: string) => {

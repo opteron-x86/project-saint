@@ -13,7 +13,7 @@ import { MitreTactic, TechniquesCoverageResponse } from '@/api/types';
 export const useMitreAttackData = (platformFilter?: string | null) => {
   // Fetch the full matrix data (tactics with nested techniques/subtechniques)
   const {
-    data: matrixData,
+    data: matrixResponse,
     isLoading: isLoadingMatrix,
     isError: isErrorMatrix,
     error: errorMatrix,
@@ -34,7 +34,11 @@ export const useMitreAttackData = (platformFilter?: string | null) => {
 
   // Process and validate matrix data
   const processedMatrix = useMemo(() => {
-    if (!matrixData) return null;
+    if (!matrixResponse) return null;
+    
+    // matrixResponse is already an array (MitreTactic[])
+    // extraction happens in fetchMitreMatrix endpoint
+    const matrixData = matrixResponse;
     
     // Ensure data is in the expected format
     if (!Array.isArray(matrixData)) {
@@ -54,7 +58,7 @@ export const useMitreAttackData = (platformFilter?: string | null) => {
         platforms: technique.platforms || [],
       }))
     }));
-  }, [matrixData]);
+  }, [matrixResponse]);
 
   // Extract available platforms from filter options or matrix data
   const availablePlatforms = useMemo(() => {

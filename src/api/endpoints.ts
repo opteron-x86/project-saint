@@ -291,7 +291,9 @@ export const exportRules = async (options: ExportOptions): Promise<ExportRespons
  */
 export const fetchMitreMatrix = async (platforms?: string[]): Promise<MitreMatrixData> => {
   const params = platforms?.length ? { platforms: platforms.join(',') } : {};
-  return await apiGet<MitreMatrixData>('/mitre/matrix', params);
+  const response = await apiGet<any>('/mitre/matrix', params);
+
+  return response.matrix || response;
 };
 
 /**
