@@ -420,7 +420,7 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                   <Box>
                     <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
                       <Typography variant="body2" color={showAllTechniques ? "text.disabled" : "text.primary"}>
-                        Confidence Threshold: {confidenceThreshold.toFixed(1)}
+                        Confidence: {(confidenceThreshold * 100).toFixed(0)}%
                       </Typography>
                       <Chip 
                         label={`${filteredTechniques.length} techniques`}
@@ -470,11 +470,6 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                         </Stack>
                       }
                     />
-                    {!showAllTechniques && (
-                      <Typography variant="caption" color="text.secondary">
-                        Filtering by confidence ≥ {confidenceThreshold.toFixed(1)}
-                      </Typography>
-                    )}
                   </Stack>
                 </Stack>
               </Box>
