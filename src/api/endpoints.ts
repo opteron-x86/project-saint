@@ -20,6 +20,11 @@ import {
   CveStats,
   CreateIssuePayload,
   CreateIssueResponse,
+  AffectedRulesResponse,
+  RuleDeprecationCheck,
+  UpdateMappingsOptions,
+  UpdateMappingsResponse,
+  DeprecationStatistics,
 } from './types';
 
 // Base endpoint paths
@@ -37,6 +42,12 @@ const ENDPOINTS = {
   MITRE_TECHNIQUES: '/mitre/techniques',
   MITRE_TACTICS: '/mitre/tactics',
   
+  // Deprecation management endpoints
+  DEPRECATED_STATISTICS: '/deprecated/statistics',
+  DEPRECATED_AFFECTED_RULES: '/deprecated/affected-rules',
+  DEPRECATED_CHECK_RULE: '/deprecated/check-rule',
+  DEPRECATED_UPDATE_MAPPINGS: '/deprecated/update-mappings',
+
   // CVE endpoints
   CVES: '/cves',
   CVE_BY_ID: (id: string) => `/cves/${id}`,
@@ -420,6 +431,75 @@ export const fetchFilterOptions = async (): Promise<FilterOptionsResponse> => {
     mitre_techniques: response.mitre_techniques || [],
     cve_severities: response.cve_severities || [],
     enrichment_levels: response.enrichment_levels || []
+  };
+};
+
+// --- DEPRECATION MANAGEMENT ENDPOINTS ---
+
+/**
+ * Get system-wide deprecation statistics
+ */
+export const fetchDeprecationStats = async (): Promise<DeprecationStatistics> => {
+  const response = await apiGet<any>(ENDPOINTS.DEPRECATED_STATISTICS);
+  
+  return {
+    total_techniques: response.total_techniques || 0,
+    deprecated_techniques: response.deprecated_techniques || 0,
+    revoked_techniques: response.revoked_techniques || 0,
+    total_deprecated_or_revoked: response.total_deprecated_or_revoked || 0,
+    techniques_with_replacements: response.techniques_with_replacements || 0,
+    rules_affected: response.rules_affected || 0,
+    percentage_deprecated: response.percentage_deprecated || 0,
+    percentage_revoked: response.percentage_revoked || 0,
+  };
+};
+
+/**
+ * Get all rules with deprecated technique mappings
+ */
+export const fetchRulesWithDeprecatedTechniques = async (): Promise<AffectedRulesResponse> => {
+  const response = await apiGet<any>(ENDPOINTS.DEPRECATED_AFFECTED_RULES);
+  
+  return {
+    total_affected_rules: response.total_affected_rules || 0,
+    rules: response.rules || [],
+  };
+};
+
+/**
+ * Check specific rule for deprecated technique mappings
+ */
+export const checkRuleDeprecation = async (ruleId: string): Promise<RuleDeprecationCheck> => {
+  const params = { rule_id: ruleId };
+  const response = await apiGet<any>(ENDPOINTS.DEPRECATED_CHECK_RULE, params);
+  
+  return {
+    rule_id: response.rule_id,
+    has_deprecated_techniques: response.has_deprecated_techniques || false,
+    deprecated_count: response.deprecated_count || 0,
+    warnings: response.warnings || [],
+  };
+};
+
+/**
+ * Update or generate recommendations for deprecated technique mappings
+ */
+export const updateDeprecatedMappings = async (
+  options: UpdateMappingsOptions
+): Promise<UpdateMappingsResponse> => {
+  const payload = {
+    auto_update: options.auto_update || false,
+    dry_run: options.dry_run || true,
+    rule_ids: options.rule_ids,
+  };
+  
+  const response = await apiPost<any>(ENDPOINTS.DEPRECATED_UPDATE_MAPPINGS, payload);
+  
+  return {
+    updates_made: response.updates_made || 0,
+    recommendations_generated: response.recommendations_generated || 0,
+    updates: response.updates || [],
+    recommendations: response.recommendations || [],
   };
 };
 

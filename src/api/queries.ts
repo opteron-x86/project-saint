@@ -31,6 +31,12 @@ import {
   fetchFilterOptions,
   globalSearch,
   
+  // Deprecation management endpoints
+  fetchDeprecationStats,
+  fetchRulesWithDeprecatedTechniques,
+  checkRuleDeprecation,
+  updateDeprecatedMappings,
+
   // Analytics endpoints
   fetchDashboardData,
   fetchTrendData,
@@ -58,6 +64,12 @@ import {
   CveStats,
   CreateIssuePayload,
   CreateIssueResponse,
+  DeprecationStatistics,
+  AffectedRulesResponse,
+  RuleDeprecationCheck,
+  UpdateMappingsOptions,
+  UpdateMappingsResponse,
+  DeprecatedTechniqueWarning,
 } from './types';
 
 // Define proper error type
@@ -92,7 +104,12 @@ export const queryKeys = {
     pagination ? JSON.stringify(pagination) : 'no_pagination',
     search ?? 'no_search',
   ],
-  
+
+  // Deprecation management
+  deprecationStats: () => ['deprecationStats'],
+  deprecatedRules: () => ['deprecatedRules'],
+  ruleDeprecationCheck: (ruleId: string) => ['ruleDeprecation', ruleId],
+
   // CVEs
   cves: (pagination: PaginationParams, filters?: { severities?: string[]; with_rules_only?: boolean; query?: string }) => [
     'cves',
@@ -224,6 +241,119 @@ export const useMitreTechniquesQuery = (
     staleTime: 10 * 60 * 1000,
     ...options,
   });
+};
+
+
+// --- DEPRECATION QUERY HOOKS ---
+
+/**
+ * Hook for deprecation statistics
+ */
+export const useDeprecationStatsQuery = (
+  options?: UseQueryOptions<DeprecationStatistics, Error>
+) => {
+  return useQuery<DeprecationStatistics, Error>({
+    queryKey: queryKeys.deprecationStats(),
+    queryFn: fetchDeprecationStats,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    ...options,
+  });
+};
+
+/**
+ * Hook for fetching rules with deprecated techniques
+ */
+export const useRulesWithDeprecatedQuery = (
+  options?: UseQueryOptions<AffectedRulesResponse, Error>
+) => {
+  return useQuery<AffectedRulesResponse, Error>({
+    queryKey: queryKeys.deprecatedRules(),
+    queryFn: fetchRulesWithDeprecatedTechniques,
+    staleTime: 2 * 60 * 1000, // Cache for 2 minutes
+    ...options,
+  });
+};
+
+/**
+ * Hook for checking specific rule deprecation status
+ * Integrates with existing rule detail data
+ */
+export const useRuleDeprecationCheck = (
+  ruleId: string | null,
+  options?: UseQueryOptions<RuleDeprecationCheck, Error>
+) => {
+  return useQuery<RuleDeprecationCheck, Error>({
+    queryKey: queryKeys.ruleDeprecationCheck(ruleId!),
+    queryFn: () => checkRuleDeprecation(ruleId!),
+    enabled: !!ruleId,
+    staleTime: 10 * 60 * 1000, // Cache for 10 minutes
+    ...options,
+  });
+};
+
+/**
+ * Mutation hook for updating deprecated mappings
+ */
+export const useUpdateDeprecatedMappings = (
+  options?: UseMutationOptions<UpdateMappingsResponse, Error, UpdateMappingsOptions>
+) => {
+  const queryClient = useQueryClient();
+  
+  return useMutation<UpdateMappingsResponse, Error, UpdateMappingsOptions>({
+    mutationFn: updateDeprecatedMappings,
+    onSuccess: (data, variables) => {
+      // Invalidate relevant queries after successful update
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.deprecationStats(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.deprecatedRules(),
+      });
+      
+      // Invalidate specific rule queries if rule IDs were provided
+      if (variables.rule_ids?.length) {
+        variables.rule_ids.forEach(ruleId => {
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.ruleDetail(ruleId),
+          });
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.ruleDeprecationCheck(ruleId),
+          });
+        });
+      }
+      
+      // Invalidate all rules queries to reflect updates
+      queryClient.invalidateQueries({
+        queryKey: ['rules'],
+      });
+    },
+    ...options,
+  });
+};
+
+// --- HELPER HOOKS ---
+
+/**
+ * Combined hook for rule detail with deprecation check
+ * Fetches both rule details and deprecation status in parallel
+ */
+export const useRuleWithDeprecationCheck = (
+  ruleId: string | null,
+  options?: {
+    ruleOptions?: UseQueryOptions<RuleDetail, Error>;
+    deprecationOptions?: UseQueryOptions<RuleDeprecationCheck, Error>;
+  }
+) => {
+  const ruleQuery = useRuleQuery(ruleId, options?.ruleOptions);
+  const deprecationQuery = useRuleDeprecationCheck(ruleId, options?.deprecationOptions);
+  
+  return {
+    rule: ruleQuery.data,
+    deprecation: deprecationQuery.data,
+    isLoading: ruleQuery.isLoading || deprecationQuery.isLoading,
+    isError: ruleQuery.isError || deprecationQuery.isError,
+    error: ruleQuery.error || deprecationQuery.error,
+  };
 };
 
 // --- CVE QUERY HOOKS ---

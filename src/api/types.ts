@@ -25,16 +25,19 @@ export interface PaginationParams {
 }
 
 // --- MITRE ATT&CK Data Structures ---
-// Enhanced to support both base and enriched responses
 export interface MitreTechnique {
   id: string;
-  // Support both 'id' and 'technique_id' for compatibility
   technique_id?: string;
   name: string;
   description?: string | null;
   url?: string | null;
   is_subtechnique: boolean;
   is_deprecated?: boolean;
+  deprecated_date?: string | null;
+  superseded_by?: string | null;
+  deprecation_reason?: string | null;
+  revoked?: boolean;
+  version?: string | null;
   stix_id?: string | null;
   platforms?: string[];
   data_sources?: string[];
@@ -43,7 +46,6 @@ export interface MitreTechnique {
   coverage_percentage?: number;
   parent_technique_id?: string | null;
   tactics?: string[];
-  // Enrichment fields from API
   confidence?: number;
 }
 
@@ -63,20 +65,19 @@ export interface MitreTactic {
 export type MitreMatrixData = MitreTactic[];
 
 // --- CVE Data Structures ---
-// Enhanced to support both base and enriched responses
 export interface CveData {
   id: string;
   cve_id: string;
   description?: string | null;
   severity?: string | null;
   cvss_score?: number | null;
-  // Support legacy field name
   cvss_v3_score?: number | null;
   published_date?: string | null;
   modified_date?: string | null;
   references?: string[] | null;
   rule_count?: number;
 }
+
 
 export interface CveStats {
   total_cves: number;
@@ -102,6 +103,7 @@ export interface RuleSummary {
   linked_technique_ids?: string[] | null;
   has_mitre_mapping?: boolean;
   has_cve_references?: boolean;
+  has_deprecated_techniques?: boolean;
   enrichment_score?: number | null;
   tags?: string[] | null;
 }
@@ -111,12 +113,12 @@ export interface RuleDetail extends RuleSummary {
   source_file_path?: string | null;
   raw_rule?: any | null;
   linked_techniques?: TechniqueBase[];
-  // Support enriched MITRE techniques from API
   mitre_techniques?: MitreTechnique[] | null;
   cve_references?: CveData[] | null;
   cves?: CveData[] | null;
   related_rules?: RuleSummary[] | null;
   rule_metadata?: Record<string, unknown> | null;
+  deprecated_technique_warnings?: DeprecatedTechniqueWarning[];
   rule_content?: string | null;
   rule_type?: string | null;
   language?: string | null;
@@ -140,6 +142,78 @@ export interface RuleDetail extends RuleSummary {
     last_tested?: string | null;
   } | null;
   [key: string]: any;
+}
+
+export interface DeprecatedTechniqueWarning {
+  technique_id: string;
+  technique_name: string;
+  deprecated_date?: string | null;
+  superseded_by?: string | null;
+  deprecation_reason?: string | null;
+  is_revoked: boolean;
+  recommendation: string;
+}
+
+
+export interface DeprecationStatistics {
+  total_techniques: number;
+  deprecated_techniques: number;
+  revoked_techniques: number;
+  total_deprecated_or_revoked: number;
+  techniques_with_replacements: number;
+  rules_affected: number;
+  percentage_deprecated: number;
+  percentage_revoked: number;
+}
+
+export interface AffectedRule {
+  rule_id: string;
+  source_rule_id: string;
+  rule_name: string;
+  rule_source: string;
+  deprecated_techniques: {
+    technique_id: string;
+    technique_name: string;
+    is_deprecated: boolean;
+    is_revoked: boolean;
+    superseded_by?: string | null;
+    mapping_confidence?: number;
+  }[];
+}
+
+export interface AffectedRulesResponse {
+  total_affected_rules: number;
+  rules: AffectedRule[];
+}
+
+export interface RuleDeprecationCheck {
+  rule_id: string;
+  has_deprecated_techniques: boolean;
+  deprecated_count: number;
+  warnings: DeprecatedTechniqueWarning[];
+}
+
+export interface UpdateMappingsOptions {
+  auto_update?: boolean;
+  dry_run?: boolean;
+  rule_ids?: string[];
+}
+
+export interface UpdateMappingsResponse {
+  updates_made: number;
+  recommendations_generated: number;
+  updates?: {
+    rule_id: string;
+    old_technique: string;
+    new_technique?: string;
+    action?: string;
+  }[];
+  recommendations?: {
+    rule_id: string;
+    current_technique: string;
+    recommended_technique: string;
+    reason: string;
+  }[];
 }
 
 // --- Filter Options ---

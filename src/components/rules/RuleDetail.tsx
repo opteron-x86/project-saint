@@ -451,7 +451,7 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                     />
                   </Box>
                   
-                  {/* Show All toggle - repositioned below slider */}
+                  {/* Show All toggle */}
                   <Stack direction="row" alignItems="center" justifyContent="space-between">
                     <FormControlLabel
                       control={
