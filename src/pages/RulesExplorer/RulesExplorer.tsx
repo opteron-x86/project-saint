@@ -413,9 +413,11 @@ const RulesExplorer: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const location = useLocation();
   
-
-  // Store hooks
-  const { selectRule: setSelectedRuleInStore } = useRuleStore();
+  // Store hooks - add addRecentlyViewedRule
+  const { 
+    selectRule: setSelectedRuleInStore, 
+    addRecentlyViewedRule 
+  } = useRuleStore();
 
   // Local state
   const [viewMode, setViewMode] = useState<ViewMode>('table');
@@ -433,7 +435,9 @@ const RulesExplorer: React.FC = () => {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
+  
   useSearchParamHandler();
+  
   // Main data hook
   const {
     rules: fetchedRules,
@@ -460,6 +464,13 @@ const RulesExplorer: React.FC = () => {
     isError: isErrorDetail,
     error: errorDetail,
   } = useRuleQuery(selectedRuleIdForDetail);
+
+  // Add rule to recently viewed when full details load
+  useEffect(() => {
+    if (selectedRuleFullDetail && selectedRuleIdForDetail) {
+      addRecentlyViewedRule(selectedRuleFullDetail);
+    }
+  }, [selectedRuleFullDetail, selectedRuleIdForDetail, addRecentlyViewedRule]);
 
   // Bookmarks functionality
   const { bookmarkedRules, toggleBookmark, isBookmarked } = useRuleBookmarks();
