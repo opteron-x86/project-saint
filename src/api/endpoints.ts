@@ -71,10 +71,17 @@ const buildQueryParams = (
 ): Record<string, any> => {
   const params: Record<string, any> = {};
   
-  // Pagination - Lambda uses offset/limit
+  // Pagination
   if (pagination) {
     params.offset = (pagination.page - 1) * pagination.limit;
     params.limit = pagination.limit;
+    
+    if (pagination.sortBy) {
+      params.sort_by = pagination.sortBy;
+    }
+    if (pagination.sortDirection) {
+      params.sort_dir = pagination.sortDirection;
+    }
   }
   
   // Filters

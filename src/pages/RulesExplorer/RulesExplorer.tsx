@@ -546,10 +546,6 @@ const RulesExplorer: React.FC = () => {
     handleSortChange(model);
   }, [handleSortChange]);
 
-  const handlePaginationChange = useCallback((page: number, newPageSize?: number) => {
-    handlePageChange(page + 1, newPageSize);
-  }, [handlePageChange]);
-
   // Render content
   const renderContent = () => {
     if (isError && error) {
@@ -605,14 +601,10 @@ const RulesExplorer: React.FC = () => {
           rules={rulesToDisplay}
           bookmarkedRuleIds={bookmarkedRules}
           isLoading={effectiveIsLoading}
-          totalRules={totalRules}
-          currentPage={currentPage - 1}
-          pageSize={pageSize}
           sortModel={sortModel}
           onRuleSelect={handleRuleSelect}
           onBookmark={toggleBookmark}
           onSortChange={handleSortModelChange}
-          onPaginationChange={handlePaginationChange}
         />
       </Box>
     );

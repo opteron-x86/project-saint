@@ -5,7 +5,6 @@ import {
   GridColDef,
   GridRowParams,
   GridSortModel,
-  GridPaginationModel,
 } from '@mui/x-data-grid';
 import {
   Box,
@@ -14,7 +13,6 @@ import {
   useTheme,
   Stack,
   IconButton,
-  Tooltip,
 } from '@mui/material';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
@@ -25,13 +23,9 @@ import { formatDate } from '@/utils/format';
 
 interface RulesTableProps {
   rules: RuleSummary[];
-  totalRules: number;
-  currentPage: number;
-  pageSize: number;
   sortModel?: GridSortModel;
   isLoading?: boolean;
   onRuleSelect: (rule: RuleSummary) => void;
-  onPaginationChange: (page: number, pageSize?: number) => void;
   onSortChange?: (model: GridSortModel) => void;
   onBookmark?: (ruleId: string) => void;
   bookmarkedRuleIds?: Set<string>;
@@ -40,13 +34,9 @@ interface RulesTableProps {
 
 const RulesTable: React.FC<RulesTableProps> = ({
   rules,
-  totalRules,
-  currentPage,
-  pageSize,
   sortModel,
   isLoading = false,
   onRuleSelect,
-  onPaginationChange,
   onSortChange,
   onBookmark,
   bookmarkedRuleIds = new Set(),
@@ -54,21 +44,18 @@ const RulesTable: React.FC<RulesTableProps> = ({
 }) => {
   const theme = useTheme();
 
-  // Process rules to ensure consistent data structure
   const processedRules = useMemo(
     () =>
       rules.map((r) => ({
         ...r,
-        // Ensure id is always present for DataGrid
         id: r.id,
-        // Map any legacy fields if needed
         severity: r.severity || 'unknown',
         platforms: r.platforms || [],
       })),
     [rules]
   );
 
-  const defaultColumnsInternal: GridColDef<RuleSummary>[] = [
+  const defaultColumns: GridColDef<RuleSummary>[] = [
     {
       field: 'title',
       headerName: 'Title',
@@ -189,7 +176,7 @@ const RulesTable: React.FC<RulesTableProps> = ({
     },
   ];
 
-  const columns = externalColumns || defaultColumnsInternal;
+  const columns = externalColumns || defaultColumns;
 
   const handleRowClick = useCallback(
     (params: GridRowParams<RuleSummary>) => {
@@ -200,6 +187,14 @@ const RulesTable: React.FC<RulesTableProps> = ({
     [onRuleSelect]
   );
 
+  const handleSortModelChange = useCallback(
+    (model: GridSortModel) => {
+      if (onSortChange) {
+        onSortChange(model);
+      }
+    },
+    [onSortChange]
+  );
 
   return (
     <Box sx={{ width: '100%', height: '100%' }}>
@@ -207,24 +202,20 @@ const RulesTable: React.FC<RulesTableProps> = ({
         rows={processedRules}
         columns={columns}
         loading={isLoading}
-        rowCount={totalRules}
         
-        pageSizeOptions={[10, 25, 50, 100]}
-        paginationMode="server"
-        paginationModel={{ page: currentPage, pageSize }}
-        // onPaginationModelChange={handlePaginationModelChange}
-        
-        //  HIDE PAGINATION:
-        hideFooterPagination
-        hideFooter // This completely hides the footer including pagination
+        hideFooter
         
         sortingMode="server"
         sortModel={sortModel}
-        onSortModelChange={onSortChange}
+        onSortModelChange={handleSortModelChange}
+        
         onRowClick={handleRowClick}
         disableRowSelectionOnClick
         disableColumnMenu
+        
         autoHeight={false}
+        rowHeight={48}
+        
         sx={{
           '& .MuiDataGrid-root': {
             border: 'none',
@@ -236,15 +227,14 @@ const RulesTable: React.FC<RulesTableProps> = ({
             backgroundColor: theme.palette.background.default,
             borderBottom: `2px solid ${theme.palette.divider}`,
           },
-          // REMOVE THIS SINCE FOOTER IS HIDDEN:
-          // '& .MuiDataGrid-footerContainer': {
-          //   borderTop: `2px solid ${theme.palette.divider}`,
-          // },
           '& .MuiDataGrid-row': {
             cursor: 'pointer',
             '&:hover': {
               backgroundColor: theme.palette.action.hover,
             },
+          },
+          '& .MuiDataGrid-columnHeader:focus-within, & .MuiDataGrid-cell:focus-within': {
+            outline: 'none',
           },
         }}
       />

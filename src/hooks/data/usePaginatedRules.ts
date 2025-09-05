@@ -6,6 +6,32 @@ import { PaginationParams, RuleFilters, RuleSummary } from '../../api/types';
 import { GridSortModel } from '@mui/x-data-grid';
 import { useFilterStore } from '../../store/filterStore';
 
+// Map frontend field names to backend API field names
+const FIELD_NAME_MAPPING: Record<string, string> = {
+  // Text fields
+  'title': 'name',
+  'description': 'description',
+  
+  // Date fields
+  'modified_date': 'updated_date',
+  'created_date': 'created_date',
+  
+  // Source fields
+  'rule_source': 'rule_source',  // Backend uses rule_source, not source_name
+  
+  // Enum fields
+  'severity': 'severity',
+  'status': 'status',
+  'rule_type': 'rule_type',
+  
+  // Boolean/enrichment fields - backend may not support these for sorting
+  'has_mitre_mapping': 'has_mitre',
+  'has_cve_references': 'has_cves',
+  
+  // Array fields - typically not sortable
+  'platforms': 'platforms',
+  'tags': 'tags',
+};
 
 export const usePaginatedRules = (initialPage = 1, initialPageSize = 25) => {
   // Get filters from the global filter store
@@ -16,19 +42,18 @@ export const usePaginatedRules = (initialPage = 1, initialPageSize = 25) => {
   const [pagination, setPagination] = useState<PaginationParams>({
     page: initialPage,
     limit: initialPageSize,
-    sortBy: 'modified_date', // Default sort by modified date
+    sortBy: 'updated_date', // Use backend field name
     sortDirection: 'desc',
-    include_facets: true, // Enable facets for enhanced filtering
+    include_facets: true,
   });
 
-  // DataGrid sort model state
+  // DataGrid sort model state - use frontend field name
   const [sortModel, setSortModel] = useState<GridSortModel>([
     { field: 'modified_date', sort: 'desc' },
   ]);
 
   // Memoize filters to prevent unnecessary re-renders
   const memoizedFilters = useMemo(() => {
-    // Clean up empty arrays and undefined values to prevent unnecessary API calls
     const cleanedFilters: RuleFilters = {};
     
     Object.entries(filtersFromStore).forEach(([key, value]) => {
@@ -66,7 +91,7 @@ export const usePaginatedRules = (initialPage = 1, initialPageSize = 25) => {
     isPlaceholderData,
     isFetching,
   } = useRulesQuery(pagination, memoizedFilters, {
-    queryKey: queryKeys.rules(memoizedFilters, pagination), // Add the required queryKey
+    queryKey: queryKeys.rules(memoizedFilters, pagination),
     retry: (failureCount: number, error: any) => {
       // Don't retry on 4xx errors
       if (error?.status && error.status >= 400 && error.status < 500) {
@@ -89,8 +114,6 @@ export const usePaginatedRules = (initialPage = 1, initialPageSize = 25) => {
       hasEnrichmentData: data.rules.some(r => r.has_mitre_mapping || r.has_cve_references),
     });
     
-    // The API client should have already transformed the data,
-    // but let's add a safety check to ensure data integrity
     return data.rules.map((rule, index) => {
       // Validate required fields
       if (!rule.id) {
@@ -107,7 +130,7 @@ export const usePaginatedRules = (initialPage = 1, initialPageSize = 25) => {
         title: rule.title || 'Untitled Rule',
         severity: rule.severity || 'unknown',
         rule_source: rule.rule_source || 'Unknown Source',
-        // Add default values for new enrichment fields if not present
+        // Add default values for enrichment fields if not present
         has_mitre_mapping: rule.has_mitre_mapping ?? false,
         has_cve_references: rule.has_cve_references ?? false,
         enrichment_score: rule.enrichment_score ?? 0,
@@ -127,12 +150,17 @@ export const usePaginatedRules = (initialPage = 1, initialPageSize = 25) => {
     return pages;
   }, [data?.totalPages]);
 
-  // Facets data for enhanced filtering (if available)
+  // Facets data for enhanced filtering
   const facets = useMemo(() => {
     return data?.facets || null;
   }, [data?.facets]);
 
-  // Page change handler with enhanced logging
+  // Check if filters are active
+  const hasActiveFilters = useMemo(() => {
+    return Object.keys(memoizedFilters).length > 0;
+  }, [memoizedFilters]);
+
+  // Page change handler
   const handlePageChange = useCallback((newPage: number, newPageSize?: number) => {
     console.log('usePaginatedRules: Page change requested:', { newPage, newPageSize });
     
@@ -147,7 +175,7 @@ export const usePaginatedRules = (initialPage = 1, initialPageSize = 25) => {
     });
   }, []);
 
-  // Sort change handler with field name mapping
+  // Sort change handler with comprehensive field name mapping
   const handleSortChange = useCallback((model: GridSortModel) => {
     console.log('usePaginatedRules: Sort change requested:', model);
     
@@ -156,21 +184,17 @@ export const usePaginatedRules = (initialPage = 1, initialPageSize = 25) => {
     if (model.length > 0) {
       const { field, sort } = model[0];
       
-      // Map frontend field names to API field names if needed
-      let apiFieldName = field;
-      switch (field) {
-        case 'title':
-          apiFieldName = 'name'; // API uses 'name' field
-          break;
-        case 'modified_date':
-          apiFieldName = 'updated_date'; // API uses 'updated_date' field
-          break;
-        case 'rule_source':
-          // This might map to different fields depending on API structure
-          apiFieldName = 'source_name';
-          break;
-        default:
-          apiFieldName = field;
+      // Map frontend field name to backend API field name
+      const apiFieldName = FIELD_NAME_MAPPING[field] || field;
+      
+      // Warn if sorting on a field that backend might not support
+      if (!FIELD_NAME_MAPPING[field]) {
+        console.warn(`usePaginatedRules: No field mapping for '${field}', using as-is`);
+      }
+      
+      // Check if attempting to sort on array field
+      if (['platforms', 'tags', 'techniques', 'tactics'].includes(field)) {
+        console.warn(`usePaginatedRules: Sorting on array field '${field}' may not work`);
       }
       
       setPagination(prev => ({
@@ -189,62 +213,16 @@ export const usePaginatedRules = (initialPage = 1, initialPageSize = 25) => {
       // Reset to default sort when no sort is applied
       setPagination(prev => ({
         ...prev,
-        sortBy: 'updated_date', // Use API field name
+        sortBy: 'updated_date', // Backend field name
         sortDirection: 'desc',
         page: 1,
       }));
       
-      console.log('usePaginatedRules: Sort reset to default');
+      setSortModel([{ field: 'modified_date', sort: 'desc' }]); // Frontend field name
+      
+      console.log('usePaginatedRules: Reset to default sort');
     }
   }, []);
-
-  // Enhanced filter detection with new enrichment filters
-  const hasActiveFilters = useMemo(() => {
-    const {
-      search,
-      query,
-      severity,
-      platforms,
-      tactics,
-      techniques,
-      rule_source,
-      tags,
-      rule_platform,
-      mitre_techniques,
-      cve_ids,
-      has_mitre_mapping,
-      has_cve_references,
-      enrichment_score_min,
-      is_active,
-      validation_status,
-    } = memoizedFilters;
-
-    const hasFilters = Boolean(
-      search ||
-      query ||
-      (severity && severity.length > 0) ||
-      (platforms && platforms.length > 0) ||
-      (tactics && tactics.length > 0) ||
-      (techniques && techniques.length > 0) ||
-      (rule_source && rule_source.length > 0) ||
-      (tags && tags.length > 0) ||
-      (rule_platform && rule_platform.length > 0) ||
-      (mitre_techniques && mitre_techniques.length > 0) ||
-      (cve_ids && cve_ids.length > 0) ||
-      (validation_status && validation_status.length > 0) ||
-      has_mitre_mapping !== undefined ||
-      has_cve_references !== undefined ||
-      is_active !== undefined ||
-      (enrichment_score_min !== undefined && enrichment_score_min > 0)
-    );
-
-    console.log('usePaginatedRules: Active filters check:', {
-      hasFilters,
-      filterCount: Object.keys(memoizedFilters).length,
-    });
-
-    return hasFilters;
-  }, [memoizedFilters]);
 
   // Reset filters and pagination
   const resetFiltersAndPage = useCallback(() => {
@@ -283,7 +261,7 @@ export const usePaginatedRules = (initialPage = 1, initialPageSize = 25) => {
     rules,
     totalRules,
     totalPages,
-    facets, // New: aggregation data for enhanced filtering
+    facets,
     
     // Pagination state
     currentPage: pagination.page,
@@ -305,7 +283,7 @@ export const usePaginatedRules = (initialPage = 1, initialPageSize = 25) => {
     refetch: enhancedRefetch,
     resetFiltersAndPage,
     
-    // Enhanced debugging info
+    // Debug info
     debugInfo: {
       apiResponse: data,
       currentFilters: memoizedFilters,
