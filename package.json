@@ -1,8 +1,8 @@
 {
   "name": "saint-explorer",
   "private": true,
-  "version": "0.2.0-alpha.250910",
-  "description": "deprecated technique feature",
+  "version": "0.2.1-alpha.250910",
+  "description": "Small fix on the Elastic processor to properly populate the source_org field",
   "type": "module",
   "scripts": {
     "dev": "vite",
