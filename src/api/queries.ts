@@ -6,8 +6,10 @@ import {
   useQueryClient, 
   UseQueryOptions, 
   UseMutationOptions,
-  keepPreviousData 
+  keepPreviousData,
+  UseQueryResult
 } from '@tanstack/react-query';
+import { apiGet } from './client';
 
 import {
   // Core endpoints
@@ -436,6 +438,115 @@ export const useGlobalSearchQuery = (
     ...options,
   });
 };
+
+// Dashboard data types
+export interface DashboardOverview {
+  total_rules: number;
+  active_rules: number;
+  inactive_rules: number;
+  mitre_coverage: {
+    rules_with_mitre: number;
+    techniques_covered: number;
+    total_techniques: number;
+    coverage_percentage: number;
+  };
+  cve_coverage: {
+    rules_with_cves: number;
+    coverage_percentage: number;
+  };
+}
+
+export interface DashboardCharts {
+  severity_distribution: Array<{ name: string; value: number }>;
+  rules_by_source: Array<{ name: string; value: number }>;
+  mitre_tactic_coverage: Array<{ tactic: string; rules: number }>;
+}
+
+export interface DashboardRecentActivity {
+  recent_rules: Array<{
+    rule_id: string;
+    name: string;
+    severity: string;
+    created_date: string;
+  }>;
+  recent_updates: Array<{
+    rule_id: string;
+    name: string;
+    severity: string;
+    updated_date: string;
+  }>;
+}
+
+export interface DashboardAlert {
+  type: 'info' | 'warning' | 'error';
+  message: string;
+  count?: number;
+}
+
+export interface DashboardData {
+  overview: DashboardOverview;
+  charts: DashboardCharts;
+  recent_activity: DashboardRecentActivity;
+  alerts: DashboardAlert[];
+  metadata: {
+    generated_at: string;
+    filters_applied: Record<string, any>;
+  };
+}
+
+export interface DashboardFilters {
+  days_back?: number;
+  source_ids?: number[];
+  severities?: string[];
+}
+
+// Dashboard data query hook
+export const useDashboardQuery = (
+  filters?: DashboardFilters
+): UseQueryResult<DashboardData, Error> => {
+  return useQuery<DashboardData, Error>({
+    queryKey: ['dashboard', filters],
+    queryFn: async () => {
+      const params: Record<string, any> = {};
+      if (filters?.days_back) params.days_back = filters.days_back;
+      if (filters?.source_ids) params.source_ids = filters.source_ids;
+      if (filters?.severities) params.severities = filters.severities;
+      
+      return apiGet<DashboardData>('/analytics/dashboard', params);
+    },
+    staleTime: 60000,
+    refetchInterval: 300000,
+  });
+};
+
+export const useTrendAnalysisQuery = (
+  days_back: number = 30
+): UseQueryResult<TrendData, Error> => {
+  return useQuery<TrendData, Error>({
+    queryKey: ['trends', days_back],
+    queryFn: async () => {
+      return apiGet<TrendData>('/analytics/trends', { days_back });
+    },
+    staleTime: 300000,
+  });
+};
+
+// Trend analysis query hook
+export interface TrendData {
+  period_days: number;
+  daily_stats: Array<{
+    date: string;
+    rules_created: number;
+    rules_updated: number;
+    total_activity: number;
+  }>;
+  summary: {
+    total_created: number;
+    total_updated: number;
+    most_active_day: string | null;
+  };
+}
+
 
 // --- ANALYTICS QUERY HOOKS ---
 

@@ -423,6 +423,81 @@ export interface TrendData {
   updated_rules?: number;
 }
 
+export interface DashboardOverview {
+  total_rules: number;
+  active_rules: number;
+  inactive_rules: number;
+  mitre_coverage: {
+    rules_with_mitre: number;
+    techniques_covered: number;
+    total_techniques: number;
+    coverage_percentage: number;
+  };
+  cve_coverage: {
+    rules_with_cves: number;
+    coverage_percentage: number;
+  };
+}
+
+export interface DashboardChartData {
+  severity_distribution: Array<{ name: string; value: number }>;
+  rules_by_source: Array<{ name: string; value: number }>;
+  mitre_tactic_coverage: Array<{ tactic: string; rules: number }>;
+}
+
+export interface DashboardRecentActivity {
+  recent_rules: Array<{
+    rule_id: string;
+    name: string;
+    severity: string;
+    created_date: string;
+  }>;
+  recent_updates: Array<{
+    rule_id: string;
+    name: string;
+    severity: string;
+    updated_date: string;
+  }>;
+}
+
+export interface DashboardAlert {
+  type: 'info' | 'warning' | 'error';
+  message: string;
+  count?: number;
+}
+
+export interface DashboardData {
+  overview: DashboardOverview;
+  charts: DashboardChartData;
+  recent_activity: DashboardRecentActivity;
+  alerts: DashboardAlert[];
+  metadata: {
+    generated_at: string;
+    filters_applied: Record<string, any>;
+  };
+}
+
+export interface DashboardFilters {
+  days_back?: number;
+  source_ids?: number[];
+  severities?: string[];
+}
+
+export interface TrendData {
+  period_days: number;
+  daily_stats: Array<{
+    date: string;
+    rules_created: number;
+    rules_updated: number;
+    total_activity: number;
+  }>;
+  summary: {
+    total_created: number;
+    total_updated: number;
+    most_active_day: string | null;
+  };
+}
+
 // --- Issue Creation ---
 export type IssueType = 'False Positive' | 'Tuning Suggestion' | 'Performance Issue' | 
                         'Missing Detection' | 'Bug Report' | 'General Query';
