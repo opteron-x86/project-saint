@@ -1,7 +1,8 @@
 {
   "name": "saint-explorer",
   "private": true,
-  "version": "0.1.4-alpha.1.250905",
+  "version": "0.2.0-alpha.250910",
+  "description": "deprecated technique feature",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -13,6 +13,7 @@ import {
   Divider,
   Button,
   Alert,
+  AlertTitle,
   Grid,
   Tabs,
   Tab,
@@ -24,6 +25,10 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Badge,
   useTheme,
   useMediaQuery,
   alpha,
@@ -36,6 +41,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import SecurityIcon from '@mui/icons-material/Security';
 import WarningIcon from '@mui/icons-material/Warning';
+import ErrorIcon from '@mui/icons-material/Error';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import InfoIcon from '@mui/icons-material/Info';
 import BugReportIcon from '@mui/icons-material/BugReport';
@@ -68,6 +74,7 @@ interface RuleDetailProps {
   onClose?: () => void;
   onBookmark?: (ruleId: string) => void;
   onShare?: (ruleId: string) => void;
+  onUpdateDeprecated?: (ruleId: string) => void;
 }
 
 const RuleDetail: React.FC<RuleDetailProps> = ({
@@ -79,6 +86,7 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
   onClose,
   onBookmark,
   onShare,
+  onUpdateDeprecated,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -86,11 +94,26 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
   const [tabValue, setTabValue] = useState(0);
   const [confidenceThreshold, setConfidenceThreshold] = useState(1.0);
   const [showAllTechniques, setShowAllTechniques] = useState(false);
+  const [dismissedDeprecationWarning, setDismissedDeprecationWarning] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     metadata: true,
     technical: false,
     references: false,
   });
+
+  // Deprecation calculations
+  const deprecationInfo = useMemo(() => {
+    if (!rule?.deprecated_technique_warnings) {
+      return { hasDeprecated: false, count: 0, hasRevoked: false, hasReplacements: false };
+    }
+    const warnings = rule.deprecated_technique_warnings;
+    return {
+      hasDeprecated: warnings.length > 0,
+      count: warnings.length,
+      hasRevoked: warnings.some(w => w.is_revoked),
+      hasReplacements: warnings.some(w => w.superseded_by),
+    };
+  }, [rule?.deprecated_technique_warnings]);
 
   const copyToClipboard = useCallback((text: string) => {
     navigator.clipboard.writeText(text);
@@ -125,7 +148,6 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
     return theme.palette.success.main;
   };
 
-  // Helper to get technique ID from MitreTechnique object
   const getTechniqueId = (technique: MitreTechnique): string => {
     return technique.technique_id || technique.id;
   };
@@ -150,6 +172,30 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Deprecation Alert Banner */}
+      <Collapse in={deprecationInfo.hasDeprecated && !dismissedDeprecationWarning}>
+        <Alert 
+          severity={deprecationInfo.hasRevoked ? "error" : "warning"}
+          sx={{ m: 2, mb: 0 }}
+          action={
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              {onUpdateDeprecated && (
+                <Button size="small" onClick={() => onUpdateDeprecated(rule.id)}>
+                  Update Mappings
+                </Button>
+              )}
+              <IconButton size="small" onClick={() => setDismissedDeprecationWarning(true)}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          }
+        >
+          <AlertTitle>Technique Maintenance Required</AlertTitle>
+          This rule references {deprecationInfo.count} deprecated MITRE technique{deprecationInfo.count > 1 ? 's' : ''}.
+          {deprecationInfo.hasReplacements && ' Replacement suggestions available.'}
+        </Alert>
+      </Collapse>
+
       {/* Header */}
       <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
         <Stack direction="row" alignItems="flex-start" spacing={2}>
@@ -208,13 +254,22 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
       <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} sx={{ px: 2 }}>
         <Tab label="Overview" />
         <Tab label="Technical" />
-        <Tab label="Enrichment" />
+        <Tab 
+          label={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              Enrichment
+              {deprecationInfo.hasDeprecated && (
+                <Badge badgeContent={deprecationInfo.count} color="warning" />
+              )}
+            </Box>
+          } 
+        />
         <Tab label="Raw" />
       </Tabs>
 
       {/* Content */}
       <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-        {/* Overview Tab */}
+        {/* Overview Tab - unchanged */}
         <TabPanel value={tabValue} index={0}>
           <Stack spacing={2}>
             {/* Description */}
@@ -294,7 +349,7 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
           </Stack>
         </TabPanel>
 
-        {/* Technical Tab */}
+        {/* Technical Tab - unchanged */}
         <TabPanel value={tabValue} index={1}>
           <Stack spacing={2}>
             {/* Detection Logic */}
@@ -330,7 +385,6 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                   color: theme.palette.mode === 'dark' ? '#e0e0e0' : '#212121',
                 }}>
                   {(() => {
-                    // Extract query from various possible locations
                     if (rule.raw_rule?.query) return rule.raw_rule.query;
                     if (rule.query) return rule.query;
                     if (rule.rule_content) {
@@ -398,7 +452,7 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
           </Stack>
         </TabPanel>
 
-        {/* Enrichment Tab */}
+        {/* Enrichment Tab - with deprecation integration */}
         <TabPanel value={tabValue} index={2}>
           <Stack spacing={2}>
             {/* MITRE ATT&CK */}
@@ -407,7 +461,7 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                 MITRE ATT&CK Techniques
               </Typography>
               
-              {/* Redesigned controls section */}
+              {/* Controls section - unchanged */}
               <Box sx={{ 
                 mb: 3, 
                 p: 2, 
@@ -416,7 +470,6 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                 border: `1px solid ${alpha(theme.palette.primary.main, 0.08)}`
               }}>
                 <Stack spacing={2}>
-                  {/* Confidence Slider - Always visible */}
                   <Box>
                     <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
                       <Typography variant="body2" color={showAllTechniques ? "text.disabled" : "text.primary"}>
@@ -451,7 +504,6 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                     />
                   </Box>
                   
-                  {/* Show All toggle */}
                   <Stack direction="row" alignItems="center" justifyContent="space-between">
                     <FormControlLabel
                       control={
@@ -474,18 +526,30 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                 </Stack>
               </Box>
               
-              {/* Techniques List */}
+              {/* Techniques List with deprecation indicators */}
               {filteredTechniques.length > 0 ? (
                 <List dense>
                   {filteredTechniques.map((technique) => {
                     const techniqueId = getTechniqueId(technique);
+                    const isDeprecated = technique.is_deprecated || technique.revoked;
+                    const deprecationWarning = rule.deprecated_technique_warnings?.find(
+                      w => w.technique_id === techniqueId
+                    );
+                    
                     return (
                       <ListItem key={techniqueId} sx={{ 
                         opacity: showAllTechniques && (technique.confidence ?? 0) < confidenceThreshold ? 0.6 : 1,
-                        transition: 'opacity 0.2s ease-in-out'
+                        transition: 'opacity 0.2s ease-in-out',
+                        bgcolor: isDeprecated ? alpha(theme.palette.warning.main, 0.05) : 'transparent',
                       }}>
                         <ListItemIcon>
-                          <SecurityIcon fontSize="small" />
+                          {isDeprecated ? (
+                            technique.revoked ? 
+                              <ErrorIcon fontSize="small" color="error" /> : 
+                              <WarningIcon fontSize="small" color="warning" />
+                          ) : (
+                            <SecurityIcon fontSize="small" />
+                          )}
                         </ListItemIcon>
                         <ListItemText
                           primary={
@@ -494,7 +558,12 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                                 href={`https://attack.mitre.org/techniques/${techniqueId.replace('.', '/')}/`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                                sx={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  gap: 0.5,
+                                  textDecoration: technique.revoked ? 'line-through' : 'none',
+                                }}
                               >
                                 {techniqueId}
                                 <OpenInNewIcon sx={{ fontSize: 14 }} />
@@ -509,9 +578,27 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                                 }
                                 variant="outlined"
                               />
+                              {isDeprecated && (
+                                <Chip
+                                  label={technique.revoked ? "REVOKED" : "DEPRECATED"}
+                                  size="small"
+                                  color={technique.revoked ? "error" : "warning"}
+                                  variant="filled"
+                                  sx={{ height: 20, fontSize: '0.65rem' }}
+                                />
+                              )}
                             </Stack>
                           }
-                          secondary={technique.tactics?.join(', ')}
+                          secondary={
+                            <>
+                              {technique.tactics?.join(', ')}
+                              {deprecationWarning?.superseded_by && (
+                                <Typography variant="caption" component="span" sx={{ ml: 1, color: 'warning.main' }}>
+                                  → Migrate to {deprecationWarning.superseded_by}
+                                </Typography>
+                              )}
+                            </>
+                          }
                         />
                       </ListItem>
                     );
@@ -527,9 +614,50 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
                   </Typography>
                 </Box>
               )}
+              
+              {/* Deprecation details accordion */}
+              {deprecationInfo.hasDeprecated && (
+                <Accordion sx={{ mt: 2, bgcolor: alpha(theme.palette.warning.main, 0.05) }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center' }}>
+                      <InfoIcon sx={{ mr: 1 }} />
+                      {deprecationInfo.count} deprecated technique{deprecationInfo.count > 1 ? 's' : ''} detected
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <List dense>
+                      {rule.deprecated_technique_warnings?.map((warning) => (
+                        <ListItem key={warning.technique_id}>
+                          <ListItemIcon>
+                            {warning.is_revoked ? 
+                              <ErrorIcon fontSize="small" color="error" /> : 
+                              <WarningIcon fontSize="small" color="warning" />
+                            }
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={`${warning.technique_id}: ${warning.technique_name}`}
+                            secondary={
+                              <Stack spacing={0.5}>
+                                <Typography variant="caption">
+                                  {warning.recommendation}
+                                </Typography>
+                                {warning.deprecated_date && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    Deprecated: {formatDate(warning.deprecated_date)}
+                                  </Typography>
+                                )}
+                              </Stack>
+                            }
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </AccordionDetails>
+                </Accordion>
+              )}
             </Paper>
 
-            {/* CVE References */}
+            {/* CVE References - unchanged */}
             {rule.cve_references && rule.cve_references.length > 0 && (
               <Paper sx={{ p: 2 }}>
                 <Typography variant="subtitle2" gutterBottom>CVE References</Typography>
@@ -572,7 +700,7 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
               </Paper>
             )}
 
-            {/* Malware Family & Intrusion Set */}
+            {/* Remaining sections unchanged */}
             {(rule.malware_family || rule.intrusion_set) && (
               <Paper sx={{ p: 2 }}>
                 <Typography variant="subtitle2" gutterBottom>Threat Intelligence</Typography>
@@ -593,7 +721,6 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
               </Paper>
             )}
 
-            {/* Enrichment Score */}
             {rule.enrichment_score !== undefined && rule.enrichment_score !== null && (
               <Paper sx={{ p: 2 }}>
                 <Typography variant="subtitle2" gutterBottom>Enrichment Quality</Typography>
@@ -622,7 +749,7 @@ const RuleDetail: React.FC<RuleDetailProps> = ({
           </Stack>
         </TabPanel>
 
-        {/* Raw Tab */}
+        {/* Raw Tab - unchanged */}
         <TabPanel value={tabValue} index={3}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="subtitle2" gutterBottom>Raw Rule Data</Typography>

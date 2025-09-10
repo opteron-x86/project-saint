@@ -6,7 +6,9 @@ import { RuleFilters, FilterOption, FilterOptionsResponse } from '@/api/types';
 import { fetchFilterOptions } from '@/api/endpoints';
 
 interface FilterState {
-  filters: RuleFilters;
+  filters: RuleFilters & {
+    deprecation_status?: 'all' | 'has_deprecated' | 'no_deprecated';
+  };
 
   // Store the fetched filter options
   platformOptions: FilterOption[];
@@ -28,13 +30,14 @@ interface FilterState {
   setRulePlatforms: (platforms: string[]) => void;
   setMitreTechniques: (techniques: string[]) => void;
   setTags: (tags: string[]) => void;
+  setDeprecationStatus: (status: 'all' | 'has_deprecated' | 'no_deprecated' | undefined) => void;
 
   clearFilters: () => void;
   fetchAllFilterOptions: () => Promise<void>;
 }
 
 // Initial filter state
-const initialFilters: RuleFilters = {
+const initialFilters: RuleFilters & { deprecation_status?: 'all' | 'has_deprecated' | 'no_deprecated' } = {
   search: undefined,
   severity: [],
   platforms: [],
@@ -45,6 +48,7 @@ const initialFilters: RuleFilters = {
   dateRange: null,
   rule_platform: [],
   mitre_techniques: [],
+  deprecation_status: undefined,
 };
 
 export const useFilterStore = create<FilterState>()(
@@ -61,22 +65,43 @@ export const useFilterStore = create<FilterState>()(
       isLoadingOptions: false,
       optionsError: null,
 
-      setSearchTerm: (search) => set((state) => ({ filters: { ...state.filters, search } })),
-      setSeverities: (severity) => set((state) => ({ filters: { ...state.filters, severity } })),
-      setPlatforms: (platforms) => set((state) => ({ filters: { ...state.filters, platforms } })),
-      setTactics: (tactics) => set((state) => ({ filters: { ...state.filters, tactics } })),
-      setRuleSources: (rule_source) => set((state) => ({ filters: { ...state.filters, rule_source } })),
-      setRulePlatforms: (rule_platform) => set((state) => ({ filters: { ...state.filters, rule_platform } })),
-      setMitreTechniques: (mitre_techniques) => set((state) => ({ filters: { ...state.filters, mitre_techniques } })),
-      setTags: (tags) => set((state) => ({ filters: { ...state.filters, tags } })),
+      setSearchTerm: (search) => 
+        set((state) => ({ filters: { ...state.filters, search } })),
+      
+      setSeverities: (severity) => 
+        set((state) => ({ filters: { ...state.filters, severity } })),
+      
+      setPlatforms: (platforms) => 
+        set((state) => ({ filters: { ...state.filters, platforms } })),
+      
+      setTactics: (tactics) => 
+        set((state) => ({ filters: { ...state.filters, tactics } })),
+      
+      setRuleSources: (rule_source) => 
+        set((state) => ({ filters: { ...state.filters, rule_source } })),
+      
+      setRulePlatforms: (rule_platform) => 
+        set((state) => ({ filters: { ...state.filters, rule_platform } })),
+      
+      setMitreTechniques: (mitre_techniques) => 
+        set((state) => ({ filters: { ...state.filters, mitre_techniques } })),
+      
+      setTags: (tags) => 
+        set((state) => ({ filters: { ...state.filters, tags } })),
+      
+      setDeprecationStatus: (deprecation_status) =>
+        set((state) => ({ filters: { ...state.filters, deprecation_status } })),
       
       clearFilters: () => set({ filters: { ...initialFilters } }),
 
       fetchAllFilterOptions: async () => {
         if (get().isLoadingOptions) return;
+        
         set({ isLoadingOptions: true, optionsError: null });
+        
         try {
           const response: FilterOptionsResponse = await fetchFilterOptions();
+          
           set({
             platformOptions: response.platforms || [],
             tacticOptions: response.tactics || [],
@@ -92,7 +117,7 @@ export const useFilterStore = create<FilterState>()(
       },
     }),
     {
-      name: 'saint-ex-filters-v5', // Increment version for new filter state
+      name: 'saint-ex-filters-v6', // Increment version for deprecation filter
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({ filters: state.filters }),
     }
@@ -108,5 +133,40 @@ export const useRuleSourceOptions = () => useFilterStore((state) => state.ruleSo
 export const useSeverityOptions = () => useFilterStore((state) => state.severityOptions);
 export const useIsLoadingOptions = () => useFilterStore((state) => state.isLoadingOptions);
 export const useOptionsError = () => useFilterStore((state) => state.optionsError);
+export const useDeprecationStatus = () => useFilterStore((state) => state.filters.deprecation_status);
+
+// Computed selectors
+export const useActiveFilterCount = () => useFilterStore((state) => {
+  const filters = state.filters;
+  let count = 0;
+  
+  if (filters.search) count++;
+  if (filters.severity?.length) count += filters.severity.length;
+  if (filters.platforms?.length) count += filters.platforms.length;
+  if (filters.rule_platform?.length) count += filters.rule_platform.length;
+  if (filters.rule_source?.length) count += filters.rule_source.length;
+  if (filters.tactics?.length) count += filters.tactics.length;
+  if (filters.mitre_techniques?.length) count += filters.mitre_techniques.length;
+  if (filters.tags?.length) count += filters.tags.length;
+  if (filters.deprecation_status && filters.deprecation_status !== 'all') count++;
+  
+  return count;
+});
+
+export const useHasActiveFilters = () => useFilterStore((state) => {
+  const filters = state.filters;
+  
+  return !!(
+    filters.search ||
+    filters.severity?.length ||
+    filters.platforms?.length ||
+    filters.rule_platform?.length ||
+    filters.rule_source?.length ||
+    filters.tactics?.length ||
+    filters.mitre_techniques?.length ||
+    filters.tags?.length ||
+    (filters.deprecation_status && filters.deprecation_status !== 'all')
+  );
+});
 
 export default useFilterStore;

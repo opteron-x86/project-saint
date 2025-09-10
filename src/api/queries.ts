@@ -106,9 +106,9 @@ export const queryKeys = {
   ],
 
   // Deprecation management
-  deprecationStats: () => ['deprecationStats'],
-  deprecatedRules: () => ['deprecatedRules'],
-  ruleDeprecationCheck: (ruleId: string) => ['ruleDeprecation', ruleId],
+  deprecationStats: () => ['deprecation', 'stats'] as const,
+  deprecatedRules: () => ['deprecated', 'rules'] as const,
+  ruleDeprecationCheck: (ruleId: string) => ['rule', ruleId, 'deprecation'] as const,
 
   // CVEs
   cves: (pagination: PaginationParams, filters?: { severities?: string[]; with_rules_only?: boolean; query?: string }) => [
@@ -287,6 +287,18 @@ export const useRuleDeprecationCheck = (
     queryFn: () => checkRuleDeprecation(ruleId!),
     enabled: !!ruleId,
     staleTime: 10 * 60 * 1000, // Cache for 10 minutes
+    ...options,
+  });
+};
+
+// Hook for fetching system-wide deprecation statistics
+export const useDeprecationStats = (
+  options?: UseQueryOptions<DeprecationStatistics, Error>
+) => {
+  return useQuery<DeprecationStatistics, Error>({
+    queryKey: queryKeys.deprecationStats(),
+    queryFn: fetchDeprecationStats,
+    staleTime: 30 * 60 * 1000, // Cache for 30 minutes
     ...options,
   });
 };
